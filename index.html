@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Search For Cattles</title>
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+<div id="app">
+  <div class="toolbar" id="toolbar">
+    <label>棋盘边长 n =</label>
+    <input type="number" id="input-n" min="2" max="15" value="5">
+    <button class="btn btn-primary" id="btn-generate">生成棋盘</button>
+    <span class="sep"></span>
+    <span style="font-size:13px">颜色:</span>
+    <div class="swatches" id="swatches"></div>
+    <span class="sep"></span>
+    <button class="btn btn-muted" id="btn-erase">🧹 擦除</button>
+    <span style="flex:1"></span>
+    <button class="btn btn-muted" id="btn-validate">验证拼图</button>
+    <button class="btn btn-success" id="btn-solve" disabled>求解</button>
+    <button class="btn btn-danger" id="btn-clear">清空</button>
+  </div>
+
+  <div class="board-wrap">
+    <canvas id="board"></canvas>
+  </div>
+
+  <div class="message" id="message">输入 n 并点击「生成棋盘」开始</div>
+</div>
+
+<script src="js/state.js"></script>
+<script src="js/renderer.js"></script>
+<script src="js/swatches.js"></script>
+<script src="js/auto-process.js"></script>
+<script src="js/interaction.js"></script>
+<script src="js/validator.js"></script>
+<script src="js/solver.js"></script>
+<script src="js/main.js"></script>
+</body>
+</html>

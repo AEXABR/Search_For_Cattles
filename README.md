@@ -2,6 +2,8 @@
 
 一个基于抖音**佛系消消消**玩法的，在浏览器中创建和求解 "Cattles" 谜题的交互式网页应用。
 
+🌐 在线体验：**[aexabr.github.io/Search_For_Cattles](https://aexabr.github.io/Search_For_Cattles/)**
+
 ## 📖 使用方法
 
 1. 用浏览器打开 `index.html`

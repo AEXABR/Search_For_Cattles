@@ -1,8 +1,10 @@
-// === Validator ===
+// 拼图验证：检查三条件 —— 无空格、恰好 n 色、每种颜色连通
+
 function validate() {
   const { n, grid } = state;
   if (n === 0) return { ok: false, msg: '请先生成棋盘' };
 
+  // 条件 1：所有格子已涂色
   const usedColors = new Set();
   for (let r = 0; r < n; r++) {
     for (let c = 0; c < n; c++) {
@@ -13,10 +15,12 @@ function validate() {
     }
   }
 
+  // 条件 2：恰好使用 n 种颜色
   if (usedColors.size !== n) {
     return { ok: false, msg: `使用了 ${usedColors.size} 种颜色，需要恰好 ${n} 种` };
   }
 
+  // 条件 3：每种颜色四方向连通（BFS）
   const DIRS = [[0,1],[0,-1],[1,0],[-1,0]];
   for (let color = 0; color < n; color++) {
     let startR = -1, startC = -1;
@@ -33,6 +37,7 @@ function validate() {
       return { ok: false, msg: `颜色 ${color + 1} 未出现在棋盘上` };
     }
 
+    // BFS 从第一个该颜色的格子出发
     const visited = Array.from({ length: n }, () => Array(n).fill(false));
     const queue = [[startR, startC]];
     visited[startR][startC] = true;
@@ -58,6 +63,7 @@ function validate() {
   return { ok: true, msg: '✓ 验证通过！拼图合法，可以求解' };
 }
 
+// 验证按钮：通过后解锁求解按钮
 document.getElementById('btn-validate').addEventListener('click', () => {
   const result = validate();
   if (result.ok) {

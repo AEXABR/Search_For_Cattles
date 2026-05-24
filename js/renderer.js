@@ -1,14 +1,16 @@
-// === Canvas Renderer ===
+// Canvas 2D 棋盘渲染
+
 const canvas = document.getElementById('board');
 const ctx = canvas.getContext('2d');
 
-const CELL_SIZE = 48;
-const CELL_GAP = 3;
-const CELL_RADIUS = 4;
-const PADDING = 4;
+const CELL_SIZE = 48;   // 每格像素
+const CELL_GAP = 3;     // 网格线宽
+const CELL_RADIUS = 4;  // 格子圆角
+const PADDING = 4;      // 棋盘边距
 
-let paletteColors = [];
+let paletteColors = [];  // HSL 颜色字符串数组
 
+// 用 HSL 色相均匀分布生成 n 种颜色
 function generatePalette(n) {
   paletteColors = [];
   for (let i = 0; i < n; i++) {
@@ -17,11 +19,13 @@ function generatePalette(n) {
   }
 }
 
+// 计算 Canvas 总像素尺寸
 function canvasTotal() {
   if (state.n === 0) return 0;
   return CELL_SIZE * state.n + CELL_GAP * (state.n - 1) + PADDING * 2;
 }
 
+// 设置 Canvas 的实际像素和 CSS 显示尺寸
 function resizeCanvas() {
   if (state.n === 0) return;
   const total = canvasTotal();
@@ -31,22 +35,26 @@ function resizeCanvas() {
   canvas.style.height = total + 'px';
 }
 
+// 给定行列，返回该格子在 Canvas 上的坐标和尺寸
 function cellRect(row, col) {
   const x = PADDING + col * (CELL_SIZE + CELL_GAP);
   const y = PADDING + row * (CELL_SIZE + CELL_GAP);
   return { x, y, w: CELL_SIZE, h: CELL_SIZE };
 }
 
+// 主渲染：画所有格子 + 解标记（🐮 图标 + 白边框）
 function render() {
   resizeCanvas();
   ctx.clearRect(0, 0, canvas.width, canvas.height);
 
+  // 画每个格子：填充颜色 + 解标记白边框
   for (let r = 0; r < state.n; r++) {
     for (let c = 0; c < state.n; c++) {
       const { x, y, w, h } = cellRect(r, c);
       const colorIdx = state.grid[r][c];
       const isCattle = state.solution && state.solution[r][c] === 1;
 
+      // 手动绘制圆角矩形（兼容性好于 roundRect）
       ctx.beginPath();
       const rad = CELL_RADIUS;
       ctx.moveTo(x + rad, y);
@@ -59,8 +67,9 @@ function render() {
       ctx.lineTo(x, y + rad);
       ctx.arcTo(x, y, x + rad, y, rad);
       ctx.closePath();
+
       if (colorIdx === -1) {
-        ctx.fillStyle = '#cdd6f4';
+        ctx.fillStyle = '#cdd6f4';   // 空格子：浅色
       } else {
         ctx.fillStyle = paletteColors[colorIdx];
       }
@@ -74,6 +83,7 @@ function render() {
     }
   }
 
+  // 叠加 🐮 图标（在格子填充之后，保证置顶）
   if (state.solution) {
     for (let r = 0; r < state.n; r++) {
       for (let c = 0; c < state.n; c++) {

@@ -1,4 +1,4 @@
-// === Sound ===
+// 涂色声音：600Hz 正弦波，80ms，Web Audio API 合成
 let audioCtx = null;
 function playClick() {
   if (!audioCtx) {
@@ -17,7 +17,7 @@ function playClick() {
   osc.stop(audioCtx.currentTime + 0.08);
 }
 
-// === Enforce same-color cells stay connected ===
+// 连通性强制：每种颜色若被分割成多个连通块，只保留最大块，小块清空
 function enforceConnectivity() {
   const DIRS = [[0,1],[0,-1],[1,0],[-1,0]];
   let changed = false;
@@ -26,6 +26,7 @@ function enforceConnectivity() {
     const visited = Array.from({ length: state.n }, () => Array(state.n).fill(false));
     const components = [];
 
+    // BFS 找出该颜色的所有连通分量
     for (let rr = 0; rr < state.n; rr++) {
       for (let cc = 0; cc < state.n; cc++) {
         if (state.grid[rr][cc] !== color || visited[rr][cc]) continue;
@@ -50,8 +51,9 @@ function enforceConnectivity() {
       }
     }
 
-    if (components.length <= 1) continue;
+    if (components.length <= 1) continue; // 已连通，跳过
 
+    // 按大小降序，保留最大块，其余清空
     components.sort((a, b) => b.length - a.length);
     for (let i = 1; i < components.length; i++) {
       for (const [rr, cc] of components[i]) {
@@ -64,7 +66,7 @@ function enforceConnectivity() {
   return changed;
 }
 
-// === Auto-fill Surrounded Regions ===
+// 包围自动填充：被单一颜色完全包围且不碰边缘的区域，自动变成该颜色
 function autoFill() {
   const DIRS = [[0,1],[0,-1],[1,0],[-1,0]];
   let changed = true;
@@ -78,6 +80,7 @@ function autoFill() {
 
         const cellVal = state.grid[r][c];
 
+        // BFS 找同值连通分量，同时收集边界颜色、判断是否碰边
         const component = [];
         const queue = [[r, c]];
         visited[r][c] = true;
@@ -91,7 +94,7 @@ function autoFill() {
           for (const [dr, dc] of DIRS) {
             const nr = cr + dr, nc = cc + dc;
             if (nr < 0 || nr >= state.n || nc < 0 || nc >= state.n) {
-              touchesEdge = true;
+              touchesEdge = true; // 触边，不能被包围
               continue;
             }
             if (state.grid[nr][nc] === cellVal) {
@@ -105,6 +108,7 @@ function autoFill() {
           }
         }
 
+        // 仅被一种颜色包围，不碰边，且包围色不等于自身 → 全部吃掉
         if (!touchesEdge && borderColors.size === 1) {
           const fillColor = [...borderColors][0];
           if (fillColor !== -1 && fillColor !== cellVal) {

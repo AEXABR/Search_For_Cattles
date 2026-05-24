@@ -1,4 +1,6 @@
-// === Generate Grid ===
+// 主入口：按钮绑定、初始化
+
+// "生成棋盘"按钮
 document.getElementById('btn-generate').addEventListener('click', () => {
   const n = parseInt(document.getElementById('input-n').value, 10);
   if (isNaN(n) || n < 2 || n > 15) {
@@ -18,7 +20,7 @@ document.getElementById('btn-generate').addEventListener('click', () => {
   updateSwatchUI();
 });
 
-// === Clear ===
+// "清空"按钮：重置所有格子为空格
 document.getElementById('btn-clear').addEventListener('click', () => {
   if (state.n === 0) return;
   for (let r = 0; r < state.n; r++) {
@@ -33,17 +35,17 @@ document.getElementById('btn-clear').addEventListener('click', () => {
   flashMessage('棋盘已清空');
 });
 
-// === Input validation ===
+// n 输入框：限制范围 2~15
 document.getElementById('input-n').addEventListener('change', function() {
   let val = parseInt(this.value, 10);
   if (isNaN(val) || val < 2) this.value = 2;
   else if (val > 15) this.value = 15;
 });
 
-// === Resize ===
+// 窗口缩放时重新渲染（保持棋盘居中适应）
 window.addEventListener('resize', () => {
   if (state.n > 0) render();
 });
 
-// === Initialize ===
+// 启动时预热 Web Worker
 initWorker();

@@ -142,7 +142,7 @@ document.getElementById('btn-solve').addEventListener('click', () => {
       state.solution = board;
       state.appState = 'solved';
       render();
-      setMessage('✓ 已找到唯一解！耗时 ' + timeMs + 'ms', 'ok');
+      setMessage('✓ 已找到一特解！耗时 ' + timeMs + 'ms', 'ok');
     } else if (type === 'no-solution') {
       state.appState = 'validated';
       document.getElementById('btn-solve').disabled = false;

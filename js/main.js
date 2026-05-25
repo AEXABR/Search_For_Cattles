@@ -3,8 +3,8 @@
 // "生成棋盘"按钮
 document.getElementById('btn-generate').addEventListener('click', () => {
   const n = parseInt(document.getElementById('input-n').value, 10);
-  if (isNaN(n) || n < 2 || n > 15) {
-    setMessage('n 必须在 2~15 之间', 'err');
+  if (isNaN(n) || n < 4 || n > 15) {
+    setMessage('n 必须在 4~15 之间', 'err');
     return;
   }
   initGrid(n);
@@ -35,11 +35,19 @@ document.getElementById('btn-clear').addEventListener('click', () => {
   flashMessage('棋盘已清空');
 });
 
-// n 输入框：限制范围 2~15
-document.getElementById('input-n').addEventListener('change', function() {
+// n 输入框：限制范围 2~15 + 滚轮调节
+const inputN = document.getElementById('input-n');
+inputN.addEventListener('change', function() {
   let val = parseInt(this.value, 10);
-  if (isNaN(val) || val < 2) this.value = 2;
+  if (isNaN(val) || val < 4) this.value = 4;
   else if (val > 15) this.value = 15;
+});
+inputN.addEventListener('wheel', function(e) {
+  if (document.activeElement !== this) return;
+  e.preventDefault();
+  let val = parseInt(this.value, 10) || 5;
+  val += e.deltaY > 0 ? -1 : 1;
+  this.value = Math.max(4, Math.min(15, val));
 });
 
 // 窗口缩放时重新渲染（保持棋盘居中适应）

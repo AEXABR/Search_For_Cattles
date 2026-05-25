@@ -180,6 +180,12 @@ body {
   font-family: inherit;
   transition: border-color var(--duration-fast) var(--ease-out),
               box-shadow var(--duration-fast) var(--ease-out);
+  -moz-appearance: textfield;
+}
+.input-n::-webkit-inner-spin-button,
+.input-n::-webkit-outer-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
 }
 
 .input-n:focus {

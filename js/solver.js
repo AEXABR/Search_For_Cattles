@@ -131,7 +131,7 @@ document.getElementById('btn-solve').addEventListener('click', () => {
     return;
   }
 
-  setMessage('求解中...', '');
+  setMessage('求解中...', 'info');
   document.getElementById('btn-solve').disabled = true;
 
   const regions = buildRegions();

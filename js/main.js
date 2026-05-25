@@ -14,7 +14,7 @@ document.getElementById('btn-generate').addEventListener('click', () => {
   render();
   flashMessage(`${n}×${n} 棋盘已生成，请选择颜色涂色`);
   document.getElementById('btn-solve').disabled = true;
-  document.getElementById('btn-erase').classList.remove('active');
+  document.getElementById('btn-erase').classList.remove('is-active');
   state.activeColor = 0;
   state.isEraser = false;
   updateSwatchUI();

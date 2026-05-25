@@ -40,6 +40,10 @@ function colorExistsOnBoard(color) {
 
 // 核心涂色逻辑：修改格子颜色 → 声音 → 连通检查 → 包围填充 → 重绘
 function paintCell(row, col) {
+  // 隐藏画布提示文字
+  const hint = document.getElementById('canvas-hint');
+  if (hint) hint.style.opacity = '0';
+
   // 求解后再次编辑，先清除求解结果
   if (state.appState === 'solved') {
     state.solution = null;
@@ -116,6 +120,6 @@ canvas.addEventListener('wheel', (e) => {
     state.activeColor = (state.activeColor - 1 + state.n) % state.n; // 上滚 → 上一色
   }
   state.isEraser = false;
-  document.getElementById('btn-erase').classList.remove('active');
+  document.getElementById('btn-erase').classList.remove('is-active');
   updateSwatchUI();
 }, { passive: false });

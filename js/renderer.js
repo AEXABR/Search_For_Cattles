@@ -3,19 +3,23 @@
 const canvas = document.getElementById('board');
 const ctx = canvas.getContext('2d');
 
-const CELL_SIZE = 48;   // 每格像素
-const CELL_GAP = 3;     // 网格线宽
-const CELL_RADIUS = 4;  // 格子圆角
-const PADDING = 4;      // 棋盘边距
+const CELL_SIZE = 48;
+const CELL_GAP = 4;
+const CELL_RADIUS = 5;
+const PADDING = 6;
+
+const BG_COLOR = '#1e1e30';       // 棋盘背景（深色）
+const EMPTY_COLOR = '#2a2a42';     // 空格子颜色
+const EMPTY_STROKE = '#3a3a58';    // 空格子边框
 
 let paletteColors = [];  // HSL 颜色字符串数组
 
-// 用 HSL 色相均匀分布生成 n 种颜色
+// 用 HSL 生成 n 种高饱和、中等亮度颜色（适配暗色背景）
 function generatePalette(n) {
   paletteColors = [];
   for (let i = 0; i < n; i++) {
     const hue = (i * 360 / n) % 360;
-    paletteColors.push(`hsl(${hue}, 70%, 60%)`);
+    paletteColors.push(`hsl(${hue}, 78%, 58%)`);
   }
 }
 
@@ -47,14 +51,16 @@ function render() {
   resizeCanvas();
   ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-  // 画每个格子：填充颜色 + 解标记白边框
+  // 棋盘底色
+  ctx.fillStyle = BG_COLOR;
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+
   for (let r = 0; r < state.n; r++) {
     for (let c = 0; c < state.n; c++) {
       const { x, y, w, h } = cellRect(r, c);
       const colorIdx = state.grid[r][c];
       const isCattle = state.solution && state.solution[r][c] === 1;
 
-      // 手动绘制圆角矩形（兼容性好于 roundRect）
       ctx.beginPath();
       const rad = CELL_RADIUS;
       ctx.moveTo(x + rad, y);
@@ -69,11 +75,15 @@ function render() {
       ctx.closePath();
 
       if (colorIdx === -1) {
-        ctx.fillStyle = '#cdd6f4';   // 空格子：浅色
+        ctx.fillStyle = EMPTY_COLOR;
+        ctx.fill();
+        ctx.strokeStyle = EMPTY_STROKE;
+        ctx.lineWidth = 1;
+        ctx.stroke();
       } else {
         ctx.fillStyle = paletteColors[colorIdx];
+        ctx.fill();
       }
-      ctx.fill();
 
       if (isCattle) {
         ctx.strokeStyle = '#ffffff';

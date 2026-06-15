@@ -1,4 +1,4 @@
-// 求解器：DFS 回溯 + Forward Checking，BigInt 位掩码，Web Worker 异步执行
+// 求解器：DFS 回溯 + Forward Checking + 动态 MRV，Web Worker 异步执行
 
 let solverWorker = null;
 
@@ -11,17 +11,9 @@ function getWorkerCode() {
 	    this.board = Array.from({ length: n }, () => Array(n).fill(0));
 
 	    // 每种颜色的初始可选位置列表（深拷贝，后续前向检查会动态缩减）
-	    const initialAvailable = positionsByColor.map(arr =>
+	    this.initialAvailable = positionsByColor.map(arr =>
 	      arr.map(p => [p[0], p[1]])
 	    );
-
-	    // MRV 启发式：按可选位置数升序排列颜色（小区域优先）
-	    this.colorOrder = Array.from({ length: n }, (_, i) => i);
-	    this.colorOrder.sort((a, b) =>
-	      initialAvailable[a].length - initialAvailable[b].length
-	    );
-
-	    this.initialAvailable = initialAvailable;
 	  }
 
 	  // 检查 (x,y) 是否与已放置的牛 (px,py) 冲突
@@ -33,13 +25,27 @@ function getWorkerCode() {
 	    return (dx === 1 || dx === -1) && (dy === 1 || dy === -1);
 	  }
 
-	  // DFS + 前向检查
-	  // available[color] = 递归到当前层时该颜色仍可用的位置列表
-	  dfs(depth, available) {
+	  // DFS + 前向检查 + 动态 MRV
+	  // available[color] = 当前层各颜色仍可用的位置列表
+	  // placedMask         = 位掩码标记已放置的颜色 (bit c = 1 表示颜色 c 已放)
+	  dfs(depth, available, placedMask) {
 	    if (depth === this.n) return true;
 
-	    const color = this.colorOrder[depth];
-	    const candidates = available[color];
+	    // ── 动态 MRV：在未放置的颜色中选候选数最少的 ──
+	    let bestColor = -1;
+	    let bestCount = Infinity;
+	    for (let c = 0; c < this.n; c++) {
+	      if (placedMask & (1 << c)) continue;   // 已放置，跳过
+	      const cnt = available[c].length;
+	      if (cnt === 0) return false;            // 某颜色无候选格，死胡同
+	      if (cnt === 1) { bestColor = c; break; } // 1 个候选不可能更优
+	      if (cnt < bestCount) {
+	        bestCount = cnt;
+	        bestColor = c;
+	      }
+	    }
+
+	    const candidates = available[bestColor];
 
 	    for (let i = 0; i < candidates.length; i++) {
 	      const x = candidates[i][0];
@@ -49,9 +55,9 @@ function getWorkerCode() {
 	      const nextAvailable = available.slice();
 	      let deadEnd = false;
 
-	      for (let d = depth + 1; d < this.n && !deadEnd; d++) {
-	        const otherColor = this.colorOrder[d];
-	        const oldList = available[otherColor];
+	      for (let c = 0; c < this.n && !deadEnd; c++) {
+	        if (c === bestColor || (placedMask & (1 << c))) continue;
+	        const oldList = available[c];
 	        const newList = [];
 	        for (let j = 0; j < oldList.length; j++) {
 	          const ox = oldList[j][0];
@@ -63,7 +69,7 @@ function getWorkerCode() {
 	        if (newList.length === 0) {
 	          deadEnd = true; // 某颜色无可用格 → 该候选不可行
 	        }
-	        nextAvailable[otherColor] = newList;
+	        nextAvailable[c] = newList;
 	      }
 
 	      if (deadEnd) continue; // 提前剪枝，试下一个候选
@@ -71,16 +77,16 @@ function getWorkerCode() {
 	      // 放置
 	      this.board[x][y] = 1;
 
-	      if (this.dfs(depth + 1, nextAvailable)) return true;
+	      if (this.dfs(depth + 1, nextAvailable, placedMask | (1 << bestColor))) return true;
 
-	      // 回溯：仅需回退 board，available 由调用栈自动恢复
+	      // 回溯：仅需回退 board，available / placedMask 由调用栈自动恢复
 	      this.board[x][y] = 0;
 	    }
 	    return false;
 	  }
 
 	  solve() {
-	    return this.dfs(0, this.initialAvailable);
+	    return this.dfs(0, this.initialAvailable, 0);
 	  }
 	}
 

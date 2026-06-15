@@ -317,6 +317,21 @@ body {
   transform: scale(1.08);
 }
 
+.swatch.on-board::after {
+  content: '✓';
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--success);
+  background: rgb(0 0 0 / 0.35);
+  font-size: 16px;
+  font-weight: 700;
+  pointer-events: none;
+  border-radius: inherit;
+}
+
 .swatch-label {
   font-size: 11px;
   color: var(--text-muted);

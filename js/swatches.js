@@ -26,6 +26,8 @@ function updateSwatchUI() {
   swatches.forEach(s => {
     const idx = parseInt(s.dataset.colorIdx);
     s.classList.toggle('active', idx === state.activeColor && !state.isEraser);
+    // 棋盘上已有该颜色 → 显示绿色对钩
+    s.classList.toggle('on-board', colorExistsOnBoard(idx));
   });
 }
 

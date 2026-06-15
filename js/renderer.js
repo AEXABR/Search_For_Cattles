@@ -108,4 +108,7 @@ function render() {
       }
     }
   }
+
+  // 每次渲染后刷新色板对钩状态
+  updateSwatchUI();
 }

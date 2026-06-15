@@ -92,6 +92,41 @@ canvas.addEventListener('mousemove', (e) => {
 canvas.addEventListener('mouseup', () => { painting = false; });
 canvas.addEventListener('mouseleave', () => { painting = false; }); // 鼠标移出 Canvas 停止拖拽
 
+// ---- 右键擦除 ----
+canvas.addEventListener('contextmenu', (e) => {
+  e.preventDefault();
+  if (state.n === 0) return;
+  const cell = getCell(e);
+  if (!cell) return;
+
+  // 求解后再次编辑，先清除求解结果
+  if (state.appState === 'solved') {
+    state.solution = null;
+    state.appState = 'editing';
+    document.getElementById('btn-solve').disabled = true;
+  }
+
+  if (state.grid[cell.row][cell.col] === -1) return; // 已经是空格
+
+  state.grid[cell.row][cell.col] = -1;
+  state.appState = 'editing';
+  document.getElementById('btn-solve').disabled = true;
+  playClick();
+
+  // 后处理：连通性 → 包围填充
+  let loopChanged = true;
+  while (loopChanged) {
+    loopChanged = false;
+    if (enforceConnectivity()) loopChanged = true;
+    if (autoFill()) loopChanged = true;
+  }
+  render();
+
+  // 隐藏画布提示
+  const hint = document.getElementById('canvas-hint');
+  if (hint) hint.style.opacity = '0';
+});
+
 // ---- 触屏事件 ----
 canvas.addEventListener('touchstart', (e) => {
   if (state.n === 0) return;

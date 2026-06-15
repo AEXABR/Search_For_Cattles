@@ -1,96 +1,112 @@
-// 求解器：JS 移植自 Solver.h，BigInt 位掩码，Web Worker 异步执行
+// 求解器：DFS 回溯 + Forward Checking，BigInt 位掩码，Web Worker 异步执行
 
 let solverWorker = null;
 
 // Web Worker 代码（字符串形式，通过 Blob URL 创建）
 function getWorkerCode() {
   return `
-const dx = [-1, -1, 1, 1];  // 四个对角方向
-const dy = [-1, 1, -1, 1];
+	class Solver {
+	  constructor(n, positionsByColor) {
+	    this.n = n;
+	    this.board = Array.from({ length: n }, () => Array(n).fill(0));
 
-class Solver {
-  constructor(n, positionsByColor) {
-    this.n = n;
-    this.positionsByColor = positionsByColor; // 每种颜色的可选位置列表
-    this.usedRow = 0n;  // BigInt 位掩码：已占用的行
-    this.usedCol = 0n;  // BigInt 位掩码：已占用的列
-    this.board = Array.from({ length: n }, () => Array(n).fill(0));
+	    // 每种颜色的初始可选位置列表（深拷贝，后续前向检查会动态缩减）
+	    const initialAvailable = positionsByColor.map(arr =>
+	      arr.map(p => [p[0], p[1]])
+	    );
 
-    // 按可选位置数升序排列颜色（小区域优先，剪枝效果好）
-    this.colorOrder = Array.from({ length: n }, (_, i) => i);
-    this.colorOrder.sort((a, b) =>
-      positionsByColor[a].length - positionsByColor[b].length
-    );
-  }
+	    // MRV 启发式：按可选位置数升序排列颜色（小区域优先）
+	    this.colorOrder = Array.from({ length: n }, (_, i) => i);
+	    this.colorOrder.sort((a, b) =>
+	      initialAvailable[a].length - initialAvailable[b].length
+	    );
 
-  // 检查 (x,y) 能否放牛：行未用、列未用、四对角无牛
-  canPlace(x, y) {
-    if ((this.usedRow >> BigInt(x)) & 1n) return false;
-    if ((this.usedCol >> BigInt(y)) & 1n) return false;
-    for (let k = 0; k < 4; k++) {
-      const nx = x + dx[k];
-      const ny = y + dy[k];
-      if (nx >= 0 && nx < this.n && ny >= 0 && ny < this.n && this.board[nx][ny] === 1) {
-        return false;
-      }
-    }
-    return true;
-  }
+	    this.initialAvailable = initialAvailable;
+	  }
 
-  // DFS 回溯：逐颜色尝试每个可选位置
-  dfs(depth) {
-    if (depth === this.n) return true; // 全部颜色各放了一头牛
+	  // 检查 (x,y) 是否与已放置的牛 (px,py) 冲突
+	  // 冲突条件: 同行 / 同列 / 四对角相邻
+	  conflictsWith(x, y, px, py) {
+	    if (x === px || y === py) return true;
+	    const dx = x - px;
+	    const dy = y - py;
+	    return (dx === 1 || dx === -1) && (dy === 1 || dy === -1);
+	  }
 
-    const color = this.colorOrder[depth];
-    const positions = this.positionsByColor[color];
+	  // DFS + 前向检查
+	  // available[color] = 递归到当前层时该颜色仍可用的位置列表
+	  dfs(depth, available) {
+	    if (depth === this.n) return true;
 
-    for (let i = 0; i < positions.length; i++) {
-      const x = positions[i][0];
-      const y = positions[i][1];
+	    const color = this.colorOrder[depth];
+	    const candidates = available[color];
 
-      if (!this.canPlace(x, y)) continue;
+	    for (let i = 0; i < candidates.length; i++) {
+	      const x = candidates[i][0];
+	      const y = candidates[i][1];
 
-      const rowBit = 1n << BigInt(x);
-      const colBit = 1n << BigInt(y);
+	      // ── 前向检查：把当前选择传播到所有未放置的颜色 ──
+	      const nextAvailable = available.slice();
+	      let deadEnd = false;
 
-      this.usedRow |= rowBit;
-      this.usedCol |= colBit;
-      this.board[x][y] = 1;
+	      for (let d = depth + 1; d < this.n && !deadEnd; d++) {
+	        const otherColor = this.colorOrder[d];
+	        const oldList = available[otherColor];
+	        const newList = [];
+	        for (let j = 0; j < oldList.length; j++) {
+	          const ox = oldList[j][0];
+	          const oy = oldList[j][1];
+	          if (!this.conflictsWith(ox, oy, x, y)) {
+	            newList.push(oldList[j]);
+	          }
+	        }
+	        if (newList.length === 0) {
+	          deadEnd = true; // 某颜色无可用格 → 该候选不可行
+	        }
+	        nextAvailable[otherColor] = newList;
+	      }
 
-      if (this.dfs(depth + 1)) return true;
+	      if (deadEnd) continue; // 提前剪枝，试下一个候选
 
-      // 回溯
-      this.board[x][y] = 0;
-      this.usedRow &= ~rowBit;
-      this.usedCol &= ~colBit;
-    }
-    return false;
-  }
-}
+	      // 放置
+	      this.board[x][y] = 1;
 
-self.onmessage = function(e) {
-  const { n, regions } = e.data;
-  const positionsByColor = regions.map(reg =>
-    reg.map(pos => [pos.x, pos.y])
-  );
+	      if (this.dfs(depth + 1, nextAvailable)) return true;
 
-  const solver = new Solver(n, positionsByColor);
-  const start = performance.now();
+	      // 回溯：仅需回退 board，available 由调用栈自动恢复
+	      this.board[x][y] = 0;
+	    }
+	    return false;
+	  }
 
-  // 30 秒超时保护
-  const timeout = setTimeout(() => {
-    self.postMessage({ type: 'timeout' });
-  }, 30000);
+	  solve() {
+	    return this.dfs(0, this.initialAvailable);
+	  }
+	}
 
-  if (solver.dfs(0)) {
-    clearTimeout(timeout);
-    const elapsed = (performance.now() - start).toFixed(1);
-    self.postMessage({ type: 'solution', board: solver.board, timeMs: parseFloat(elapsed) });
-  } else {
-    clearTimeout(timeout);
-    self.postMessage({ type: 'no-solution' });
-  }
-};
+	self.onmessage = function(e) {
+	  const { n, regions } = e.data;
+	  const positionsByColor = regions.map(reg =>
+	    reg.map(pos => [pos.x, pos.y])
+	  );
+
+	  const solver = new Solver(n, positionsByColor);
+	  const start = performance.now();
+
+	  // 30 秒超时保护
+	  const timeout = setTimeout(() => {
+	    self.postMessage({ type: 'timeout' });
+	  }, 30000);
+
+	  if (solver.solve()) {
+	    clearTimeout(timeout);
+	    const elapsed = (performance.now() - start).toFixed(1);
+	    self.postMessage({ type: 'solution', board: solver.board, timeMs: parseFloat(elapsed) });
+	  } else {
+	    clearTimeout(timeout);
+	    self.postMessage({ type: 'no-solution' });
+	  }
+	};
 `;
 }
 

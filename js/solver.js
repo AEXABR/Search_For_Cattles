@@ -18,7 +18,7 @@ function getWorkerCode() {
 
 	  // 检查 (x,y) 是否与已放置的牛 (px,py) 冲突
 	  // 冲突条件: 同行 / 同列 / 四对角相邻
-	  conflictsWith(x, y, px, py) {
+	  #conflictsWith(x, y, px, py) {
 	    if (x === px || y === py) return true;
 	    const dx = x - px;
 	    const dy = y - py;
@@ -28,7 +28,7 @@ function getWorkerCode() {
 	  // DFS + 前向检查 + 动态 MRV
 	  // available[color] = 当前层各颜色仍可用的位置列表
 	  // placedMask         = 位掩码标记已放置的颜色 (bit c = 1 表示颜色 c 已放)
-	  dfs(depth, available, placedMask) {
+	  #dfs(depth, available, placedMask) {
 	    if (depth === this.n) return true;
 
 	    // ── 动态 MRV：在未放置的颜色中选候选数最少的 ──
@@ -62,7 +62,7 @@ function getWorkerCode() {
 	        for (let j = 0; j < oldList.length; j++) {
 	          const ox = oldList[j][0];
 	          const oy = oldList[j][1];
-	          if (!this.conflictsWith(ox, oy, x, y)) {
+	          if (!this.#conflictsWith(ox, oy, x, y)) {
 	            newList.push(oldList[j]);
 	          }
 	        }
@@ -77,7 +77,7 @@ function getWorkerCode() {
 	      // 放置
 	      this.board[x][y] = 1;
 
-	      if (this.dfs(depth + 1, nextAvailable, placedMask | (1 << bestColor))) return true;
+	      if (this.#dfs(depth + 1, nextAvailable, placedMask | (1 << bestColor))) return true;
 
 	      // 回溯：仅需回退 board，available / placedMask 由调用栈自动恢复
 	      this.board[x][y] = 0;
@@ -86,7 +86,7 @@ function getWorkerCode() {
 	  }
 
 	  solve() {
-	    return this.dfs(0, this.initialAvailable, 0);
+	    return this.#dfs(0, this.initialAvailable, 0);
 	  }
 	}
 

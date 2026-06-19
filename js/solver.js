@@ -1,4 +1,4 @@
-// 求解器：DFS 回溯 + Forward Checking + 动态 MRV，Web Worker 异步执行
+// 求解器：DFS 回溯 + Forward Checking + 动态 MRV + Degree + LCV，Web Worker 异步执行
 
 let solverWorker = null;
 
@@ -14,6 +14,25 @@ function getWorkerCode() {
 	    this.initialAvailable = positionsByColor.map(arr =>
 	      arr.map(p => [p[0], p[1]])
 	    );
+
+	    // 预计算每种颜色的度（与其他颜色候选的总冲突数），用于 MRV 平局打破
+	    this.degree = new Array(n).fill(0);
+	    for (let c = 0; c < n; c++) {
+	      let deg = 0;
+	      const listC = this.initialAvailable[c];
+	      for (let d = 0; d < n; d++) {
+	        if (c === d) continue;
+	        const listD = this.initialAvailable[d];
+	        for (const p1 of listC) {
+	          for (const p2 of listD) {
+	            if (this.#conflictsWith(p1[0], p1[1], p2[0], p2[1])) {
+	              deg++;
+	            }
+	          }
+	        }
+	      }
+	    this.degree[c] = deg;
+	    }
 	  }
 
 	  // 检查 (x,y) 是否与已放置的牛 (px,py) 冲突
@@ -31,7 +50,7 @@ function getWorkerCode() {
 	  #dfs(depth, available, placedMask) {
 	    if (depth === this.n) return true;
 
-	    // ── 动态 MRV：在未放置的颜色中选候选数最少的 ──
+	    // ── 动态 MRV + Degree 平局打破 ──
 	    let bestColor = -1;
 	    let bestCount = Infinity;
 	    for (let c = 0; c < this.n; c++) {
@@ -39,13 +58,30 @@ function getWorkerCode() {
 	      const cnt = available[c].length;
 	      if (cnt === 0) return false;            // 某颜色无候选格，死胡同
 	      if (cnt === 1) { bestColor = c; break; } // 1 个候选不可能更优
-	      if (cnt < bestCount) {
+	      if (cnt < bestCount ||
+	          (cnt === bestCount && this.degree[c] > this.degree[bestColor])) {
 	        bestCount = cnt;
 	        bestColor = c;
 	      }
 	    }
 
 	    const candidates = available[bestColor];
+
+	    // ── LCV：按对其他颜色的约束数升序排列（约束少的优先尝试）──
+	    if (candidates.length > 1) {
+	      candidates.sort((a, b) => {
+	        let countA = 0, countB = 0;
+	        for (let c = 0; c < this.n; c++) {
+	          if (c === bestColor || (placedMask & (1 << c))) continue;
+	          const list = available[c];
+	          for (let j = 0; j < list.length; j++) {
+	            if (this.#conflictsWith(list[j][0], list[j][1], a[0], a[1])) countA++;
+	            if (this.#conflictsWith(list[j][0], list[j][1], b[0], b[1])) countB++;
+	          }
+	        }
+	        return countA - countB;
+	      });
+	    }
 
 	    for (let i = 0; i < candidates.length; i++) {
 	      const x = candidates[i][0];

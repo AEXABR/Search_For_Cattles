@@ -1,4 +1,4 @@
-// 求解器：DFS 回溯 + Forward Checking + 动态 MRV + Degree + LCV，Web Worker 异步执行
+// 求解器：DFS 回溯 + Forward Checking + AC-3 预处理 + 动态 MRV + Degree + LCV，Web Worker 异步执行
 
 let solverWorker = null;
 
@@ -42,6 +42,54 @@ function getWorkerCode() {
 	    const dx = x - px;
 	    const dy = y - py;
 	    return (dx === 1 || dx === -1) && (dy === 1 || dy === -1);
+	  }
+
+	  // ── AC-3 弧一致性预处理 ──
+	  // 在 DFS 前迭代删除所有弧不一致的候选值，削减初始搜索空间
+	  #revise(xi, xj, available) {
+	    let removed = false;
+	    const listI = available[xi];
+	    const listJ = available[xj];
+	    let i = 0;
+	    while (i < listI.length) {
+	      const [x, y] = listI[i];
+	      let hasSupport = false;
+	      for (let j = 0; j < listJ.length; j++) {
+	        const [px, py] = listJ[j];
+	        if (!this.#conflictsWith(x, y, px, py)) {
+          hasSupport = true;
+          break;
+	        }
+	      }
+	      if (!hasSupport) {
+	        listI.splice(i, 1);
+	        removed = true;
+	      } else {
+	        i++;
+	      }
+	    }
+	    return removed;
+	  }
+
+	  #ac3(available) {
+	    const queue = [];
+	    for (let i = 0; i < this.n; i++) {
+	      for (let j = 0; j < this.n; j++) {
+	        if (i !== j) queue.push([i, j]);
+	      }
+	    }
+	    while (queue.length > 0) {
+	      const [xi, xj] = queue.pop();
+	      if (this.#revise(xi, xj, available)) {
+	        if (available[xi].length === 0) return false;
+	        for (let xk = 0; xk < this.n; xk++) {
+          if (xk !== xi && xk !== xj) {
+            queue.push([xk, xi]);
+          }
+	        }
+	      }
+	    }
+	    return true;
 	  }
 
 	  // DFS + 前向检查 + 动态 MRV
@@ -122,7 +170,10 @@ function getWorkerCode() {
 	  }
 
 	  solve() {
-	    return this.#dfs(0, this.initialAvailable, 0);
+	    // AC-3 预处理：在 DFS 前消除所有弧不一致的候选
+	    const preprocessed = this.initialAvailable.map(arr => arr.slice());
+	    if (!this.#ac3(preprocessed)) return false;
+	    return this.#dfs(0, preprocessed, 0);
 	  }
 	}
 

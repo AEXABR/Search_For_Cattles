@@ -9,6 +9,7 @@
  *   v1.1  + 前向检查 (Forward Checking)
  *   v1.2  + 动态 MRV (Minimum Remaining Values)
  *   v1.3  + Degree 平局打破 + LCV 值排序
+ *   v1.4  + AC-3 弧一致性预处理
  *
  * ============================================================================
  * 涉及知识点
@@ -110,7 +111,11 @@ public:
 	// 封装 DFS 的内部参数 (depth, available, placed_mask)，外部只需调用 solve()，
 	// 不必关心初始值。在这个小程序里 main() 就在同文件，封装可有可无；
 	// 但若 Solver 被多处引用，封装能防止调用方传错初始参数。
-	bool solve() { return dfs(0, initial_available_, 0); }
+	bool solve() {
+		Available preprocessed = initial_available_;
+		if (!ac3(preprocessed)) return false;
+		return dfs(0, move(preprocessed), 0);
+	}
 
 	// ── 获取结果棋盘 ──
 	// 为什么返回 const T& (常量引用) 而不是 T (值)?
@@ -150,6 +155,68 @@ private:
 		int dx = abs(x - px);
 		int dy = abs(y - py);
 		return dx == 1 && dy == 1; // 四对角相邻
+	}
+
+	// ------------------------------------------------------------------------
+	// AC-3 弧一致性预处理
+	// ------------------------------------------------------------------------
+	// revise(i, j): 从颜色 i 的候选集中删去"与颜色 j 所有候选都冲突"的位置。
+	// 返回值: true = 至少删了一个候选, false = 无变化。
+	bool revise(int xi, int xj, Available &available)
+	{
+		bool removed = false;
+		auto &listI = available[xi];
+		const auto &listJ = available[xj];
+
+		for (auto it = listI.begin(); it != listI.end(); )
+		{
+			auto [x, y] = *it;
+			bool has_support = false;
+			for (const auto &[px, py] : listJ)
+			{
+				if (!conflictsWith(x, y, px, py))
+				{
+					has_support = true;
+					break;
+				}
+			}
+			if (!has_support)
+			{
+				it = listI.erase(it); // 无支撑 → 删除
+				removed = true;
+			}
+			else
+			{
+				++it;
+			}
+		}
+		return removed;
+	}
+
+	// ac3: 维护弧队列，反复 revise 直到不动点。
+	// 返回 false = 某颜色候选被删空 → 问题无解。
+	bool ac3(Available &available)
+	{
+		vector<pair<int, int>> queue;
+		for (int i = 0; i < n_; ++i)
+			for (int j = 0; j < n_; ++j)
+				if (i != j)
+					queue.push_back({i, j});
+
+		while (!queue.empty())
+		{
+			auto [xi, xj] = queue.back();
+			queue.pop_back();
+			if (revise(xi, xj, available))
+			{
+				if (available[xi].empty())
+					return false; // 某颜色候选全删 → 无解
+				for (int xk = 0; xk < n_; ++xk)
+					if (xk != xi && xk != xj)
+						queue.push_back({xk, xi});
+			}
+		}
+		return true;
 	}
 
 	// ------------------------------------------------------------------------

@@ -111,25 +111,26 @@ public:
 		degree_.resize(n, 0);
 		for (int c = 0; c < n; ++c)
 		{
-		int deg = 0;
-		const auto &listC = initial_available_[c];
-		for (int d = 0; d < n; ++d)
-		{
-			if (c == d) continue;
-			const auto &listD = initial_available_[d];
-			for (const auto &p1 : listC)
+			int deg = 0;
+			const auto &listC = initial_available_[c];
+			for (int d = 0; d < n; ++d)
 			{
-				for (const auto &p2 : listD)
+				if (c == d)
+					continue;
+				const auto &listD = initial_available_[d];
+				for (const auto &p1 : listC)
 				{
-					if (conflictsWith(p1.first, p1.second, p2.first, p2.second))
+					for (const auto &p2 : listD)
 					{
-						deg++;
+						if (conflictsWith(p1.first, p1.second, p2.first, p2.second))
+						{
+							deg++;
+						}
 					}
 				}
 			}
+			degree_[c] = deg;
 		}
-		degree_[c] = deg;
-	}
 	}
 	// NOTE: initial_available_ 必须放在初始化列表中直接用拷贝构造，而非先
 	// 默认构造空 vector 再在函数体中赋值。C++ 规则：成员在进入 {} 之前已
@@ -145,9 +146,11 @@ public:
 	// 2. AC-3 预处理   → 迭代删除所有弧不一致候选，搜前即斩死分支
 	// 3. DFS 回溯搜索  → 在净化后的候选集上执行，move 避免二次拷贝
 	// 流水线顺序不可调换: AC-3 必须在前，因为 DFS 依赖净化后的候选集。
-	bool solve() {
+	bool solve()
+	{
 		Available preprocessed = initial_available_;
-		if (!ac3(preprocessed)) return false;
+		if (!ac3(preprocessed))
+			return false;
 		return dfs(0, move(preprocessed), 0);
 	}
 
@@ -202,7 +205,7 @@ private:
 		auto &listI = available[xi];
 		const auto &listJ = available[xj];
 
-		for (auto it = listI.begin(); it != listI.end(); )
+		for (auto it = listI.begin(); it != listI.end();)
 		{
 			auto [x, y] = *it;
 			bool has_support = false;
@@ -264,10 +267,12 @@ private:
 		vector<pair<int, int>> queue;
 		for (int i = 0; i < n_; ++i)
 		{
-			if (placed_mask & (1u << i)) continue;
+			if (placed_mask & (1u << i))
+				continue;
 			for (int j = 0; j < n_; ++j)
 			{
-				if (i == j || (placed_mask & (1u << j))) continue;
+				if (i == j || (placed_mask & (1u << j)))
+					continue;
 				queue.push_back({i, j});
 			}
 		}
@@ -277,7 +282,8 @@ private:
 			queue.pop_back();
 			if (revise(xi, xj, available))
 			{
-				if (available[xi].empty()) return false;
+				if (available[xi].empty())
+					return false;
 				for (int xk = 0; xk < n_; ++xk)
 				{
 					if (xk != xi && xk != xj && !(placed_mask & (1u << xk)))
@@ -370,7 +376,8 @@ private:
 				int deg_c = 0, deg_best = 0;
 				for (int d = 0; d < n_; ++d)
 				{
-					if (d == c || (placed_mask & (1u << d))) continue;
+					if (d == c || (placed_mask & (1u << d)))
+						continue;
 					const auto &lc = available[c], &ld = available[d];
 					for (const auto &p1 : lc)
 						for (const auto &p2 : ld)
@@ -379,7 +386,8 @@ private:
 				}
 				for (int d = 0; d < n_; ++d)
 				{
-					if (d == best_color || (placed_mask & (1u << d))) continue;
+					if (d == best_color || (placed_mask & (1u << d)))
+						continue;
 					const auto &lb = available[best_color], &ld = available[d];
 					for (const auto &p1 : lb)
 						for (const auto &p2 : ld)
@@ -406,23 +414,24 @@ private:
 		if (candidates.size() > 1)
 		{
 			sort(candidates.begin(), candidates.end(),
-			     [&](const Pos &a, const Pos &b) {
-				     int countA = 0, countB = 0;
-				     for (int c = 0; c < n_; ++c)
-				     {
-					     if (c == best_color || (placed_mask & (1u << c)))
-						     continue;
-					     const auto &list = available[c];
-					     for (const auto &p : list)
-					     {
-						     if (conflictsWith(p.first, p.second, a.first, a.second))
-							     countA++;
-						     if (conflictsWith(p.first, p.second, b.first, b.second))
-							     countB++;
-					     }
-				     }
-				     return countA < countB;
-			     });
+				 [&](const Pos &a, const Pos &b)
+				 {
+					 int countA = 0, countB = 0;
+					 for (int c = 0; c < n_; ++c)
+					 {
+						 if (c == best_color || (placed_mask & (1u << c)))
+							 continue;
+						 const auto &list = available[c];
+						 for (const auto &p : list)
+						 {
+							 if (conflictsWith(p.first, p.second, a.first, a.second))
+								 countA++;
+							 if (conflictsWith(p.first, p.second, b.first, b.second))
+								 countB++;
+						 }
+					 }
+					 return countA < countB;
+				 });
 		}
 
 		// ════════════════════════════════════════════════════════════════

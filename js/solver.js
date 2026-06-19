@@ -1,4 +1,4 @@
-// 求解器：DFS 回溯 + Forward Checking + AC-3 预处理 + 动态 MRV + Degree + LCV，Web Worker 异步执行
+// 求解器：DFS 回溯 + Forward Checking + AC-3 预处理 + MAC + 动态 MRV + 动态 Degree + LCV，Web Worker 异步执行
 
 let solverWorker = null;
 
@@ -92,13 +92,38 @@ function getWorkerCode() {
 	    return true;
 	  }
 
+	  // ── MAC：在已放置变量的剩余域上运行 AC-3（跳过 placedMask 中的颜色）──
+	  // 与 solve() 中的 AC-3 预处理不同：此处仅操作未放置颜色，每次 DFS 都调用。
+	  #mac(available, placedMask) {
+	    const queue = [];
+	    for (let i = 0; i < this.n; i++) {
+	      if (placedMask & (1 << i)) continue;
+	      for (let j = 0; j < this.n; j++) {
+	        if (i === j || (placedMask & (1 << j))) continue;
+	        queue.push([i, j]);
+	      }
+	    }
+	    while (queue.length > 0) {
+	      const [xi, xj] = queue.pop();
+	      if (this.#revise(xi, xj, available)) {
+	        if (available[xi].length === 0) return false;
+	        for (let xk = 0; xk < this.n; xk++) {
+          if (xk !== xi && xk !== xj && !(placedMask & (1 << xk))) {
+            queue.push([xk, xi]);
+          }
+	        }
+	      }
+	    }
+	    return true;
+	  }
+
 	  // DFS + 前向检查 + 动态 MRV
 	  // available[color] = 当前层各颜色仍可用的位置列表
 	  // placedMask         = 位掩码标记已放置的颜色 (bit c = 1 表示颜色 c 已放)
 	  #dfs(depth, available, placedMask) {
 	    if (depth === this.n) return true;
 
-	    // ── 动态 MRV + Degree 平局打破 ──
+	    // ── 动态 MRV + 动态 Degree 平局打破 ──
 	    let bestColor = -1;
 	    let bestCount = Infinity;
 	    for (let c = 0; c < this.n; c++) {
@@ -106,10 +131,33 @@ function getWorkerCode() {
 	      const cnt = available[c].length;
 	      if (cnt === 0) return false;            // 某颜色无候选格，死胡同
 	      if (cnt === 1) { bestColor = c; break; } // 1 个候选不可能更优
-	      if (cnt < bestCount ||
-	          (cnt === bestCount && this.degree[c] > this.degree[bestColor])) {
+	      if (cnt < bestCount) {
 	        bestCount = cnt;
 	        bestColor = c;
+	      } else if (cnt === bestCount) {
+	        // 动态 Degree：用当前 available 计算平局颜色的度，比静态度更精准
+	        let degC = 0, degBest = 0;
+	        for (let d = 0; d < this.n; d++) {
+          if (d === c || (placedMask & (1 << d))) continue;
+          const listC = available[c], listD = available[d];
+          for (const p1 of listC) {
+            for (const p2 of listD) {
+              if (this.#conflictsWith(p1[0], p1[1], p2[0], p2[1])) degC++;
+            }
+          }
+	        }
+	        for (let d = 0; d < this.n; d++) {
+          if (d === bestColor || (placedMask & (1 << d))) continue;
+          const listB = available[bestColor], listD = available[d];
+          for (const p1 of listB) {
+            for (const p2 of listD) {
+              if (this.#conflictsWith(p1[0], p1[1], p2[0], p2[1])) degBest++;
+            }
+          }
+	        }
+	        if (degC > degBest) {
+          bestColor = c;
+	        }
 	      }
 	    }
 
@@ -157,6 +205,10 @@ function getWorkerCode() {
 	      }
 
 	      if (deadEnd) continue; // 提前剪枝，试下一个候选
+
+	      // ── MAC：在剩余未放置颜色上运行 AC-3 ──
+	      const macPlacedMask = placedMask | (1 << bestColor);
+	      if (!this.#mac(nextAvailable, macPlacedMask)) continue;
 
 	      // 放置
 	      this.board[x][y] = 1;

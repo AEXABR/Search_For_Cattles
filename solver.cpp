@@ -10,6 +10,7 @@
  *   v1.2  + 动态 MRV (Minimum Remaining Values)
  *   v1.3  + Degree 平局打破 + LCV 值排序
  *   v1.4  + AC-3 弧一致性预处理
+ *   v1.5  + MAC 完整弧一致 (DFS 中传播) + 动态 Degree (当前域计算)
  *
  * ============================================================================
  * 优化策略全景 — CSP 的 Fail-First + Succeed-First 范式
@@ -253,6 +254,41 @@ private:
 	}
 
 	// ------------------------------------------------------------------------
+	// MAC: 在已放置变量的剩余域上运行 AC-3（仅针对未放置颜色）
+	// ------------------------------------------------------------------------
+	// 与预处理中的 ac3() 不同：此处仅操作未放置颜色，每次 DFS 放置后调用。
+	// 比 Forward Checking 更强：FC 只检查"新放置与未放置是否冲突"，
+	// MAC 额外传播"未放置颜色之间是否仍互容"。
+	bool mac(Available &available, uint32_t placed_mask)
+	{
+		vector<pair<int, int>> queue;
+		for (int i = 0; i < n_; ++i)
+		{
+			if (placed_mask & (1u << i)) continue;
+			for (int j = 0; j < n_; ++j)
+			{
+				if (i == j || (placed_mask & (1u << j))) continue;
+				queue.push_back({i, j});
+			}
+		}
+		while (!queue.empty())
+		{
+			auto [xi, xj] = queue.back();
+			queue.pop_back();
+			if (revise(xi, xj, available))
+			{
+				if (available[xi].empty()) return false;
+				for (int xk = 0; xk < n_; ++xk)
+				{
+					if (xk != xi && xk != xj && !(placed_mask & (1u << xk)))
+						queue.push_back({xk, xi});
+				}
+			}
+		}
+		return true;
+	}
+
+	// ------------------------------------------------------------------------
 	// DFS 递归核心
 	// ------------------------------------------------------------------------
 	// 参数:
@@ -323,11 +359,37 @@ private:
 				best_color = c;
 				break;
 			} // 1 个候选已达最优
-			if (cnt < best_count ||
-			    (cnt == best_count && degree_[c] > degree_[best_color]))
+			if (cnt < best_count)
 			{
 				best_count = cnt;
 				best_color = c;
+			}
+			else if (cnt == best_count)
+			{
+				// 动态 Degree：用当前 available 计算平局颜色的度
+				int deg_c = 0, deg_best = 0;
+				for (int d = 0; d < n_; ++d)
+				{
+					if (d == c || (placed_mask & (1u << d))) continue;
+					const auto &lc = available[c], &ld = available[d];
+					for (const auto &p1 : lc)
+						for (const auto &p2 : ld)
+							if (conflictsWith(p1.first, p1.second, p2.first, p2.second))
+								deg_c++;
+				}
+				for (int d = 0; d < n_; ++d)
+				{
+					if (d == best_color || (placed_mask & (1u << d))) continue;
+					const auto &lb = available[best_color], &ld = available[d];
+					for (const auto &p1 : lb)
+						for (const auto &p2 : ld)
+							if (conflictsWith(p1.first, p1.second, p2.first, p2.second))
+								deg_best++;
+				}
+				if (deg_c > deg_best)
+				{
+					best_color = c;
+				}
 			}
 		}
 
@@ -427,6 +489,11 @@ private:
 
 			if (dead_end)
 				continue; // 剪枝，试下一个
+
+			// ── MAC：在剩余未放置颜色上运行 AC-3 ──
+			uint32_t mac_mask = placed_mask | (1u << best_color);
+			if (!mac(next_available, mac_mask))
+				continue; // 某未放置颜色候选清空 → 剪枝
 
 			// ── 放置 ──
 			board_[x][y] = 1;

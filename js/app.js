@@ -119,6 +119,7 @@ document.getElementById('btn-clear').addEventListener('click', () => {
   }
   state.solution = null;
   state.appState = 'editing';
+  document.getElementById('btn-solve').disabled = false;
   render();
   flashMessage('棋盘已清空');
 });

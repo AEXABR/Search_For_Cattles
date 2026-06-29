@@ -190,10 +190,7 @@ function applyBoardEdit(row, col, newVal) {
   const hint = document.getElementById('canvas-hint');
   if (hint) hint.style.opacity = '0';
 
-  if (state.appState === 'solved') {
-    state.solution = null;
-    state.appState = 'editing';
-  }
+  if (state.appState === 'solved') return;  // 求解后锁定棋盘，需清空才能编辑
 
   if (state.grid[row][col] === newVal) return;
 

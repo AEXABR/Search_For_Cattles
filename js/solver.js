@@ -285,17 +285,32 @@ function buildRegions() {
 
 // 求解按钮
 document.getElementById('btn-solve').addEventListener('click', () => {
-  if (state.appState !== 'validated') return;
+  if (state.n === 0) return;
   if (!solverWorker) initWorker();
   if (!solverWorker) {
     setMessage('浏览器不支持 Web Worker', 'err');
     return;
   }
 
+  // 客户端快速校验
+  const regions = buildRegions();
+  const usedColors = new Set();
+  for (let r = 0; r < state.n; r++) {
+    for (let c = 0; c < state.n; c++) {
+      if (state.grid[r][c] === -1) {
+        setMessage('请先涂满所有格子', 'err');
+        return;
+      }
+      usedColors.add(state.grid[r][c]);
+    }
+  }
+  if (usedColors.size !== state.n) {
+    setMessage(`需要使用恰好 ${state.n} 种颜色，当前 ${usedColors.size} 种`, 'err');
+    return;
+  }
+
   setMessage('求解中...', 'info');
   document.getElementById('btn-solve').disabled = true;
-
-  const regions = buildRegions();
 
   solverWorker.onmessage = function(e) {
     const { type, board, timeMs } = e.data;
@@ -305,18 +320,15 @@ document.getElementById('btn-solve').addEventListener('click', () => {
       render();
       setMessage('✓ 已找到一特解！耗时 ' + timeMs + 'ms', 'ok');
     } else if (type === 'no-solution') {
-      state.appState = 'validated';
       document.getElementById('btn-solve').disabled = false;
       setMessage('此拼图无解，请调整颜色布局', 'err');
     } else if (type === 'timeout') {
-      state.appState = 'validated';
       document.getElementById('btn-solve').disabled = false;
       setMessage('求解超时（30秒），请尝试更小的 n 或调整布局', 'err');
     }
   };
 
   solverWorker.onerror = function(err) {
-    state.appState = 'validated';
     document.getElementById('btn-solve').disabled = false;
     setMessage('求解器错误: ' + err.message, 'err');
   };

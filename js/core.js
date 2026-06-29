@@ -50,7 +50,7 @@ const state = {
   activeColor: 0,
   isEraser: false,
   solution: null,
-  appState: 'idle',  // idle → editing → validated → solved
+  appState: 'idle',  // idle → editing → solved
 };
 
 function initGrid(n) {

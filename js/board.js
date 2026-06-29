@@ -193,7 +193,6 @@ function applyBoardEdit(row, col, newVal) {
   if (state.appState === 'solved') {
     state.solution = null;
     state.appState = 'editing';
-    document.getElementById('btn-solve').disabled = true;
   }
 
   if (state.grid[row][col] === newVal) return;
@@ -205,7 +204,6 @@ function applyBoardEdit(row, col, newVal) {
 
   state.grid[row][col] = newVal;
   state.appState = 'editing';
-  document.getElementById('btn-solve').disabled = true;
   playClick();
 
   let loopChanged = true;

@@ -1,5 +1,16 @@
 // ═══ 棋盘操作层：渲染 · 涂色 · 连通性 · 包围填充 · 音效 ═══
 
+// ── 渲染节流：合并同一帧内的多次 render 调用 ──
+let renderPending = false;
+function scheduleRender() {
+  if (renderPending) return;
+  renderPending = true;
+  requestAnimationFrame(() => {
+    renderPending = false;
+    render();
+  });
+}
+
 // ── 音效 ──
 let audioCtx = null;
 function playClick() {
@@ -211,5 +222,5 @@ function applyBoardEdit(row, col, newVal) {
     if (enforceConnectivity()) loopChanged = true;
     if (autoFill()) loopChanged = true;
   }
-  render();
+  scheduleRender();
 }

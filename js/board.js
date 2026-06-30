@@ -1,35 +1,5 @@
 // ═══ 棋盘操作层：渲染 · 涂色 · 连通性 · 包围填充 · 音效 ═══
 
-// ── 帧末合并：音效 + 闪烁 + 后处理 + 渲染，每帧跑一次 ──
-let framePending = false;
-let needsProcess = false;
-let needsFeedback = false;
-
-function scheduleFrame() {
-  needsProcess = true;
-  needsFeedback = true;
-  if (framePending) return;
-  framePending = true;
-  requestAnimationFrame(() => {
-    framePending = false;
-    if (needsFeedback) {
-      playClick();
-      pulseMessage();
-      needsFeedback = false;
-    }
-    if (needsProcess) {
-      let loopChanged = true;
-      while (loopChanged) {
-        loopChanged = false;
-        if (enforceConnectivity()) loopChanged = true;
-        if (autoFill()) loopChanged = true;
-      }
-      needsProcess = false;
-    }
-    render();
-  });
-}
-
 // ── 音效 ──
 let audioCtx = null;
 function playClick() {
@@ -232,6 +202,14 @@ function applyBoardEdit(row, col, newVal) {
 
   state.grid[row][col] = newVal;
   state.appState = 'editing';
+  playClick();
+  pulseMessage();
 
-  scheduleFrame();
+  let loopChanged = true;
+  while (loopChanged) {
+    loopChanged = false;
+    if (enforceConnectivity()) loopChanged = true;
+    if (autoFill()) loopChanged = true;
+  }
+  render();
 }

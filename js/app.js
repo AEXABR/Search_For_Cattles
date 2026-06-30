@@ -69,9 +69,12 @@ canvas.addEventListener('mousemove', (e) => {
   if (!painting || state.n === 0) return;
   const cell = getCell(e);
   if (!cell || !lastCell) return;
+  const newVal = state.isEraser ? -1 : state.activeColor;
+  let changed = false;
   for (const [r, c] of cellsOnLine(lastCell.row, lastCell.col, cell.row, cell.col)) {
-    applyBoardEdit(r, c, state.isEraser ? -1 : state.activeColor);
+    if (paintCellSilent(r, c, newVal)) changed = true;
   }
+  if (changed) finalizeEdit();
   lastCell = cell;
 });
 
@@ -105,9 +108,12 @@ canvas.addEventListener('touchmove', (e) => {
   e.preventDefault();
   const cell = getCell(e.touches[0]);
   if (!cell || !lastCell) return;
+  const newVal = state.isEraser ? -1 : state.activeColor;
+  let changed = false;
   for (const [r, c] of cellsOnLine(lastCell.row, lastCell.col, cell.row, cell.col)) {
-    applyBoardEdit(r, c, state.isEraser ? -1 : state.activeColor);
+    if (paintCellSilent(r, c, newVal)) changed = true;
   }
+  if (changed) finalizeEdit();
   lastCell = cell;
 }, { passive: false });
 

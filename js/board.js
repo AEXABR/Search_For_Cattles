@@ -184,27 +184,23 @@ function render() {
   updateSwatchUI();
 }
 
-// ── 统一涂色入口 ──
-// newVal: 颜色索引（涂色）或 -1（擦除）
-function applyBoardEdit(row, col, newVal) {
-  const hint = document.getElementById('canvas-hint');
-  if (hint) hint.style.opacity = '0';
-
-  if (state.appState === 'solved') return;  // 求解后锁定棋盘，需清空才能编辑
-
-  if (state.grid[row][col] === newVal) return;
-
-  if (newVal !== -1 && !isAdjacentToColor(row, col, newVal) && colorExistsOnBoard(newVal)) {
-    playClick();
-    setMessage('此颜色在其他位置已有色块，无法在此创建不连通的新色块', 'err');
-    return;
-  }
-
+// ── 涂色：轻量版（仅写 grid，返回 true 表示成功）──
+// 用于拖拽画线时批量涂色，音效/闪烁/BFS/渲染在 finalizeEdit 统一执行
+function paintCellSilent(row, col, newVal) {
+  if (state.appState === 'solved') return false;
+  if (state.grid[row][col] === newVal) return false;
+  if (newVal !== -1 && !isAdjacentToColor(row, col, newVal) && colorExistsOnBoard(newVal)) return false;
   state.grid[row][col] = newVal;
   state.appState = 'editing';
+  return true;
+}
+
+// ── 涂色收尾：音效 + 闪烁 + 连通性/包围 + 渲染，一次搞定 ──
+function finalizeEdit() {
+  const hint = document.getElementById('canvas-hint');
+  if (hint) hint.style.opacity = '0';
   playClick();
   pulseMessage();
-
   let loopChanged = true;
   while (loopChanged) {
     loopChanged = false;
@@ -212,4 +208,15 @@ function applyBoardEdit(row, col, newVal) {
     if (autoFill()) loopChanged = true;
   }
   render();
+}
+
+// 单格涂色用（右键擦除等）—— 直接调两个
+function applyBoardEdit(row, col, newVal) {
+  if (paintCellSilent(row, col, newVal)) {
+    finalizeEdit();
+  } else if (newVal !== -1 && colorExistsOnBoard(newVal) &&
+             !isAdjacentToColor(row, col, newVal)) {
+    playClick();
+    setMessage('此颜色在其他位置已有色块，无法在此创建不连通的新色块', 'err');
+  }
 }

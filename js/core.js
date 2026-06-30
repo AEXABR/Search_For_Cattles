@@ -74,6 +74,14 @@ function setMessage(text, type) {
   el.classList.add('message-flash');
 }
 
+function pulseMessage() {
+  const el = document.getElementById('message');
+  if (!el) return;
+  el.classList.remove('message-flash');
+  void el.offsetWidth;
+  el.classList.add('message-flash');
+}
+
 let msgTimer = null;
 function flashMessage(text, type) {
   if (msgTimer) clearTimeout(msgTimer);

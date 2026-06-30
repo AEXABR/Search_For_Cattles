@@ -195,6 +195,7 @@ function applyBoardEdit(row, col, newVal) {
   if (state.grid[row][col] === newVal) return;
 
   if (newVal !== -1 && !isAdjacentToColor(row, col, newVal) && colorExistsOnBoard(newVal)) {
+    playClick();
     setMessage('此颜色在其他位置已有色块，无法在此创建不连通的新色块', 'err');
     return;
   }
@@ -202,6 +203,7 @@ function applyBoardEdit(row, col, newVal) {
   state.grid[row][col] = newVal;
   state.appState = 'editing';
   playClick();
+  pulseMessage();
 
   let loopChanged = true;
   while (loopChanged) {

@@ -432,14 +432,14 @@ canvas {
   border-color: rgb(139 156 247 / 0.2);
 }
 
-/* flash animation */
+/* flash animation — quick brightness pulse, syncs with click sound (~80ms) */
 .message-flash {
-  animation: msg-pop-in var(--duration) var(--ease-spring);
+  animation: msg-flash 120ms var(--ease-out);
 }
 
-@keyframes msg-pop-in {
-  from { transform: scale(0.97); opacity: 0.7; }
-  to   { transform: scale(1);    opacity: 1; }
+@keyframes msg-flash {
+  from { filter: brightness(1.5); }
+  to   { filter: brightness(1); }
 }
 
 /* ── Footer ── */

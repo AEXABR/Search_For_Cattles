@@ -1,12 +1,24 @@
 // ═══ 棋盘操作层：渲染 · 涂色 · 连通性 · 包围填充 · 音效 ═══
 
-// ── 渲染节流：合并同一帧内的多次 render 调用 ──
-let renderPending = false;
-function scheduleRender() {
-  if (renderPending) return;
-  renderPending = true;
+// ── 帧末合并：后处理循环 + 渲染都在帧末跑一次，避免每次 mousemove 都 BFS ──
+let framePending = false;
+let needsProcess = false;
+
+function scheduleFrame() {
+  needsProcess = true;
+  if (framePending) return;
+  framePending = true;
   requestAnimationFrame(() => {
-    renderPending = false;
+    framePending = false;
+    if (needsProcess) {
+      let loopChanged = true;
+      while (loopChanged) {
+        loopChanged = false;
+        if (enforceConnectivity()) loopChanged = true;
+        if (autoFill()) loopChanged = true;
+      }
+      needsProcess = false;
+    }
     render();
   });
 }
@@ -216,11 +228,5 @@ function applyBoardEdit(row, col, newVal) {
   playClick();
   pulseMessage();
 
-  let loopChanged = true;
-  while (loopChanged) {
-    loopChanged = false;
-    if (enforceConnectivity()) loopChanged = true;
-    if (autoFill()) loopChanged = true;
-  }
-  scheduleRender();
+  scheduleFrame();
 }

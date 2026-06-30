@@ -31,24 +31,53 @@ function updateSwatchUI() {
   });
 }
 
+// ── 两点之间线段穿过的格子（超采样去重）──
+function cellsOnLine(r1, c1, r2, c2) {
+  const dist = Math.hypot(r2 - r1, c2 - c1);
+  const steps = Math.max(1, Math.ceil(dist * 2));
+  const seen = new Set();
+  const result = [];
+  for (let i = 1; i <= steps; i++) {
+    const t = i / steps;
+    const r = Math.round(r1 + (r2 - r1) * t);
+    const c = Math.round(c1 + (c2 - c1) * t);
+    const key = r + ',' + c;
+    if (!seen.has(key)) {
+      seen.add(key);
+      if (r >= 0 && r < state.n && c >= 0 && c < state.n)
+        result.push([r, c]);
+    }
+  }
+  return result;
+}
+
 // ── 画布事件：鼠标 ──
 let painting = false;
+let lastCell = null;
 
 canvas.addEventListener('mousedown', (e) => {
   if (e.button !== 0 || state.n === 0) return;
   painting = true;
   const cell = getCell(e);
-  if (cell) applyBoardEdit(cell.row, cell.col, state.isEraser ? -1 : state.activeColor);
+  if (cell) {
+    lastCell = null;
+    applyBoardEdit(cell.row, cell.col, state.isEraser ? -1 : state.activeColor);
+  }
 });
 
 canvas.addEventListener('mousemove', (e) => {
   if (!painting || state.n === 0) return;
   const cell = getCell(e);
-  if (cell) applyBoardEdit(cell.row, cell.col, state.isEraser ? -1 : state.activeColor);
+  if (!cell) return;
+  if (!lastCell) { lastCell = cell; return; }
+  for (const [r, c] of cellsOnLine(lastCell.row, lastCell.col, cell.row, cell.col)) {
+    applyBoardEdit(r, c, state.isEraser ? -1 : state.activeColor);
+  }
+  lastCell = cell;
 });
 
-canvas.addEventListener('mouseup', () => { painting = false; });
-canvas.addEventListener('mouseleave', () => { painting = false; });
+canvas.addEventListener('mouseup', () => { painting = false; lastCell = null; });
+canvas.addEventListener('mouseleave', () => { painting = false; lastCell = null; });
 
 // ── 画布事件：右键擦除 ──
 canvas.addEventListener('contextmenu', (e) => {
@@ -66,17 +95,25 @@ canvas.addEventListener('touchstart', (e) => {
   e.preventDefault();
   painting = true;
   const cell = getCell(e.touches[0]);
-  if (cell) applyBoardEdit(cell.row, cell.col, state.isEraser ? -1 : state.activeColor);
+  if (cell) {
+    lastCell = null;
+    applyBoardEdit(cell.row, cell.col, state.isEraser ? -1 : state.activeColor);
+  }
 }, { passive: false });
 
 canvas.addEventListener('touchmove', (e) => {
   if (!painting || state.n === 0) return;
   e.preventDefault();
   const cell = getCell(e.touches[0]);
-  if (cell) applyBoardEdit(cell.row, cell.col, state.isEraser ? -1 : state.activeColor);
+  if (!cell) return;
+  if (!lastCell) { lastCell = cell; return; }
+  for (const [r, c] of cellsOnLine(lastCell.row, lastCell.col, cell.row, cell.col)) {
+    applyBoardEdit(r, c, state.isEraser ? -1 : state.activeColor);
+  }
+  lastCell = cell;
 }, { passive: false });
 
-canvas.addEventListener('touchend', () => { painting = false; });
+canvas.addEventListener('touchend', () => { painting = false; lastCell = null; });
 
 // ── 画布事件：滚轮换色 ──
 canvas.addEventListener('wheel', (e) => {

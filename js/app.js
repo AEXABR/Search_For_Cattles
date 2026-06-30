@@ -60,7 +60,7 @@ canvas.addEventListener('mousedown', (e) => {
   painting = true;
   const cell = getCell(e);
   if (cell) {
-    lastCell = null;
+    lastCell = cell;
     applyBoardEdit(cell.row, cell.col, state.isEraser ? -1 : state.activeColor);
   }
 });
@@ -68,8 +68,7 @@ canvas.addEventListener('mousedown', (e) => {
 canvas.addEventListener('mousemove', (e) => {
   if (!painting || state.n === 0) return;
   const cell = getCell(e);
-  if (!cell) return;
-  if (!lastCell) { lastCell = cell; return; }
+  if (!cell || !lastCell) return;
   for (const [r, c] of cellsOnLine(lastCell.row, lastCell.col, cell.row, cell.col)) {
     applyBoardEdit(r, c, state.isEraser ? -1 : state.activeColor);
   }
@@ -96,7 +95,7 @@ canvas.addEventListener('touchstart', (e) => {
   painting = true;
   const cell = getCell(e.touches[0]);
   if (cell) {
-    lastCell = null;
+    lastCell = cell;
     applyBoardEdit(cell.row, cell.col, state.isEraser ? -1 : state.activeColor);
   }
 }, { passive: false });
@@ -105,8 +104,7 @@ canvas.addEventListener('touchmove', (e) => {
   if (!painting || state.n === 0) return;
   e.preventDefault();
   const cell = getCell(e.touches[0]);
-  if (!cell) return;
-  if (!lastCell) { lastCell = cell; return; }
+  if (!cell || !lastCell) return;
   for (const [r, c] of cellsOnLine(lastCell.row, lastCell.col, cell.row, cell.col)) {
     applyBoardEdit(r, c, state.isEraser ? -1 : state.activeColor);
   }

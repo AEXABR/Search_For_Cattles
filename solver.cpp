@@ -11,6 +11,7 @@
  *   v1.3  + Degree 平局打破 + LCV 值排序
  *   v1.4  + AC-3 弧一致性预处理
  *   v1.5  + MAC 完整弧一致 (DFS 中传播) + 动态 Degree (当前域计算)
+ *   v1.6  + 冲突矩阵预计算 + 算法门控 (AC-3/MAC/LCV 自适应开关)
  *
  * ============================================================================
  * 优化策略全景 — CSP 的 Fail-First + Succeed-First 范式
@@ -68,6 +69,7 @@
 #include <cstdint>
 #include <iostream>
 #include <numeric>
+#include <unordered_map>
 #include <vector>
 
 using namespace std;
@@ -88,6 +90,7 @@ using namespace std;
 // 核心数据结构
 // ============================================================================
 using Pos = pair<int, int>;			  // (行, 列)
+using PosIdx = int;				  // 位置唯一索引（冲突矩阵下标）
 using Candidates = vector<Pos>;		  // 一个颜色的候选位置列表
 using Available = vector<Candidates>; // 所有颜色的候选列表 (available[c])
 
@@ -193,6 +196,11 @@ private:
 		int dy = abs(y - py);
 		return dx == 1 && dy == 1; // 四对角相邻
 	}
+
+		// ── 基于预计算冲突矩阵的 O(1) 查询 ──
+		bool conflictsByIdx(int i, int j) const {
+			return conflict_[i][j];
+		}
 
 	// ------------------------------------------------------------------------
 	// AC-3 弧一致性预处理
@@ -520,6 +528,19 @@ private:
 
 		return false; // 所有候选都失败
 	}
+	// ── 冲突矩阵预计算（JS 位集优化的 C++ 等价）──
+	int total_pos_ = 0;			  // 所有颜色的候选位置总数
+	vector<int> pos_r_, pos_c_;		  // pos_r_[i] = 位置 i 的行/列
+	vector<vector<bool>> conflict_;	  // conflict_[i][j] = i 与 j 是否冲突
+
+	// pair<int,int> 的哈希（unordered_map 需要）
+	struct pair_hash {
+		size_t operator()(const Pos &p) const {
+		return hash<int>()(p.first) ^ (hash<int>()(p.second) << 16);
+	}
+	};
+	unordered_map<Pos, int, pair_hash> pos_to_idx_; // (r,c) -> 位置索引
+
 	int n_;
 	vector<vector<int>> board_;	  // board_[r][c] = 1 表示有牛
 	Available initial_available_; // 初始候选列表 (不变)

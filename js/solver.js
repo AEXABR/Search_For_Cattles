@@ -96,7 +96,7 @@ function getWorkerCode() {
 	    return count;
 	  }
 
-	  #revise(xi, xj, available) {
+	  #revise(xi, xj, available, trail = null) {
 	    const maskI = available[xi];
 	    const maskJ = available[xj];
 	    let newMask = maskI;
@@ -110,6 +110,7 @@ function getWorkerCode() {
 	      m ^= lowBit;
 	    }
 	    if (newMask !== maskI) {
+	      if (trail) trail.push({ color: xi, oldMask: maskI });
 	      available[xi] = newMask;
 	      return true;
 	    }
@@ -137,7 +138,7 @@ function getWorkerCode() {
 	    return true;
 	  }
 
-	  #mac(available, placedMask) {
+	  #mac(available, placedMask, trail) {
 	    const queue = [];
 	    for (let i = 0; i < this.n; i++) {
 	      if (placedMask & (1 << i)) continue;
@@ -148,7 +149,7 @@ function getWorkerCode() {
 	    }
 	    while (queue.length > 0) {
 	      const [xi, xj] = queue.pop();
-	      if (this.#revise(xi, xj, available)) {
+	      if (this.#revise(xi, xj, available, trail)) {
 	        if (available[xi] === 0n) return false;
 	        for (let xk = 0; xk < this.n; xk++) {
 	          if (xk !== xi && xk !== xj && !(placedMask & (1 << xk))) {
@@ -160,7 +161,7 @@ function getWorkerCode() {
 	    return true;
 	  }
 
-	  #dfs(depth, available, placedMask) {
+	  #dfs(depth, available, placedMask, trail) {
 	    if (depth === this.n) return true;
 
 	    // ── 动态 MRV + 静态 Degree 平局打破 ──
@@ -199,33 +200,41 @@ function getWorkerCode() {
 	      });
 	    }
 
+	    const macPlacedMask = placedMask | (1 << bestColor);
+
 	    for (let i = 0; i < candidates.length; i++) {
 	      const chosen = candidates[i];
-	      const r = this.posR[chosen], c = this.posC[chosen];
+	      const trailStart = trail.length;
 
-	      // ── 前向检查（位集 O(1) 过滤）──
-	      const nextAvailable = new Array(this.n);
+	      // ── 前向检查（原地过滤 + trail 记录）──
 	      let deadEnd = false;
 	      for (let col = 0; col < this.n && !deadEnd; col++) {
 	        if (col === bestColor || (placedMask & (1 << col))) continue;
-	        const newMask = available[col] & this.nonConflictMask[chosen];
+	        const oldMask = available[col];
+	        const newMask = oldMask & this.nonConflictMask[chosen];
 	        if (newMask === 0n) {
 	          deadEnd = true;
+	        } else if (newMask !== oldMask) {
+	          trail.push({ color: col, oldMask });
+	          available[col] = newMask;
 	        }
-	        nextAvailable[col] = newMask;
-	      }
-	      if (deadEnd) continue;
-
-	      // ── MAC：剩余颜色 > 3 时才跑 ──
-	      const macPlacedMask = placedMask | (1 << bestColor);
-	      if (this.n - depth > 3) {
-	        if (!this.#mac(nextAvailable, macPlacedMask)) continue;
 	      }
 
-	      // 放置
-	      this.board[r][c] = 1;
-	      if (this.#dfs(depth + 1, nextAvailable, macPlacedMask)) return true;
-	      this.board[r][c] = 0;
+	      if (!deadEnd) {
+	        // ── MAC：剩余颜色 > 3 时才跑 ──
+	        if (this.n - depth <= 3 || this.#mac(available, macPlacedMask, trail)) {
+	          const r = this.posR[chosen], c = this.posC[chosen];
+	          this.board[r][c] = 1;
+	          if (this.#dfs(depth + 1, available, macPlacedMask, trail)) return true;
+	          this.board[r][c] = 0;
+	        }
+	      }
+
+	      // ── 撤销本候选的所有修改 ──
+	      while (trail.length > trailStart) {
+	        const entry = trail.pop();
+	        available[entry.color] = entry.oldMask;
+	      }
 	    }
 	    return false;
 	  }
@@ -233,7 +242,8 @@ function getWorkerCode() {
 	  solve() {
 	    const preprocessed = this.initialMask.slice();
 	    if (!this.#ac3(preprocessed)) return false;
-	    return this.#dfs(0, preprocessed, 0);
+	    const trail = [];
+	    return this.#dfs(0, preprocessed, 0, trail);
 	  }
 	}
 

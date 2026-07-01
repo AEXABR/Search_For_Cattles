@@ -138,13 +138,14 @@ function getWorkerCode() {
 	    return true;
 	  }
 
-	  #mac(available, placedMask, trail) {
+	  #mac(available, placedMask, trail, changedColors) {
+	    // 只从域发生变化的颜色出发入队弧，而非全部 O(k²) 对
 	    const queue = [];
-	    for (let i = 0; i < this.n; i++) {
-	      if (placedMask & (1 << i)) continue;
-	      for (let j = 0; j < this.n; j++) {
-	        if (i === j || (placedMask & (1 << j))) continue;
-	        queue.push([i, j]);
+	    for (const xi of changedColors) {
+	      if (placedMask & (1 << xi)) continue;
+	      for (let xk = 0; xk < this.n; xk++) {
+	        if (xk === xi || (placedMask & (1 << xk))) continue;
+	        queue.push([xk, xi]);
 	      }
 	    }
 	    while (queue.length > 0) {
@@ -206,8 +207,9 @@ function getWorkerCode() {
 	      const chosen = candidates[i];
 	      const trailStart = trail.length;
 
-	      // ── 前向检查（原地过滤 + trail 记录）──
+	      // ── 前向检查（原地过滤 + trail 记录 + 追踪变更颜色）──
 	      let deadEnd = false;
+	      const changedColors = [];
 	      for (let col = 0; col < this.n && !deadEnd; col++) {
 	        if (col === bestColor || (placedMask & (1 << col))) continue;
 	        const oldMask = available[col];
@@ -217,12 +219,13 @@ function getWorkerCode() {
 	        } else if (newMask !== oldMask) {
 	          trail.push({ color: col, oldMask });
 	          available[col] = newMask;
+	          changedColors.push(col);
 	        }
 	      }
 
 	      if (!deadEnd) {
 	        // ── MAC：剩余颜色 > 3 时才跑 ──
-	        if (this.n - depth <= 3 || this.#mac(available, macPlacedMask, trail)) {
+	        if (this.n - depth <= 3 || this.#mac(available, macPlacedMask, trail, changedColors)) {
 	          const r = this.posR[chosen], c = this.posC[chosen];
 	          this.board[r][c] = 1;
 	          if (this.#dfs(depth + 1, available, macPlacedMask, trail)) return true;

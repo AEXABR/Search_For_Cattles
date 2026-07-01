@@ -46,30 +46,30 @@ function getWorkerCode() {
 
 	  // ── AC-3 弧一致性预处理 ──
 	  // 在 DFS 前迭代删除所有弧不一致的候选值，削减初始搜索空间
-	  #revise(xi, xj, available) {
-	    let removed = false;
-	    const listI = available[xi];
-	    const listJ = available[xj];
-	    let i = 0;
-	    while (i < listI.length) {
-	      const [x, y] = listI[i];
-	      let hasSupport = false;
-	      for (let j = 0; j < listJ.length; j++) {
-	        const [px, py] = listJ[j];
-	        if (!this.#conflictsWith(x, y, px, py)) {
-          hasSupport = true;
-          break;
+	  	  #revise(xi, xj, available) {
+	      let removed = false;
+	      const listI = available[xi];
+	      const listJ = available[xj];
+	      const kept = [];
+	      for (let i = 0; i < listI.length; i++) {
+	        const [x, y] = listI[i];
+	        let hasSupport = false;
+	        for (let j = 0; j < listJ.length; j++) {
+	          const [px, py] = listJ[j];
+	          if (!this.#conflictsWith(x, y, px, py)) {
+	            hasSupport = true;
+	            break;
+	          }
+	        }
+	        if (hasSupport) {
+	          kept.push(listI[i]);
+	        } else {
+	          removed = true;
 	        }
 	      }
-	      if (!hasSupport) {
-	        listI.splice(i, 1);
-	        removed = true;
-	      } else {
-	        i++;
-	      }
+	      if (removed) available[xi] = kept;
+	      return removed;
 	    }
-	    return removed;
-	  }
 
 	  #ac3(available) {
 	    const queue = [];

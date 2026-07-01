@@ -10,9 +10,8 @@
  *   v1.2  + 动态 MRV (Minimum Remaining Values)
  *   v1.3  + Degree 平局打破 + LCV 值排序
  *   v1.4  + AC-3 弧一致性预处理
+ *   v1.6  + 冲突矩阵预计算 + 算法门控 (AC-3/MAC/LCV 自适应开关)
  *   v1.5  + MAC 完整弧一致 (DFS 中传播) + 动态 Degree (当前域计算)
- *   v1.6  + 冲突矩阵预计算 + 算法门控 (AC-3/MAC/LCV 自适应开关)
- *   v1.6  + 冲突矩阵预计算 + 算法门控 (AC-3/MAC/LCV 自适应开关)
  *
  * ============================================================================
  * 优化策略全景 — CSP 的 Fail-First + Succeed-First 范式
@@ -134,37 +133,36 @@ public:
 				}
 			}
 			degree_[c] = deg;
+		}
 
-			// ── 位置索引 + 冲突矩阵预计算 ──
-			// 给每个位置分配唯一索引，预计算 O(1) 冲突查表。
-			// JS 版用 BigInt 位集；C++ 用 vector<bool> 等价于 bitmap。
-			total_pos_ = 0;
-			for (int c = 0; c < n; ++c)
-				total_pos_ += (int)initial_available_[c].size();
+		// ── 位置索引 + 冲突矩阵预计算 ──
+		// 给每个位置分配唯一索引，预计算 O(1) 冲突查表。
+		// JS 版用 BigInt 位集；C++ 用 vector<bool> 等价于 bitmap。
+		total_pos_ = 0;
+		for (int c2 = 0; c2 < n; ++c2)
+			total_pos_ += (int)initial_available_[c2].size();
 
-			pos_r_.resize(total_pos_);
-			pos_c_.resize(total_pos_);
-			int idx = 0;
-			for (int c = 0; c < n; ++c) {
-				for (const auto &[r, col] : initial_available_[c]) {
-					pos_r_[idx] = r;
-					pos_c_[idx] = col;
-					pos_to_idx_[Pos(r, col)] = idx;
-					idx++;
-				}
+		pos_r_.resize(total_pos_);
+		pos_c_.resize(total_pos_);
+		int idx = 0;
+		for (int c2 = 0; c2 < n; ++c2) {
+			for (const auto &[r, col] : initial_available_[c2]) {
+				pos_r_[idx] = r;
+				pos_c_[idx] = col;
+				pos_to_idx_[Pos(r, col)] = idx;
+				idx++;
 			}
+		}
 
-			// 预计算冲突矩阵: conflict_[i][j] = 位置 i 与 j 是否冲突
-			conflict_.assign(total_pos_, vector<bool>(total_pos_, false));
-			for (int i = 0; i < total_pos_; ++i) {
-				int ri = pos_r_[i], ci = pos_c_[i];
-				for (int j = 0; j < total_pos_; ++j) {
-					if (i == j) continue;
-					int rj = pos_r_[j], cj = pos_c_[j];
-					if (ri == rj || ci == cj ||
-					    (abs(ri - rj) == 1 && abs(ci - cj) == 1))
-						conflict_[i][j] = true;
-				}
+		// 预计算冲突矩阵: conflict_[i][j] = 位置 i 与 j 是否冲突
+		conflict_.assign(total_pos_, vector<bool>(total_pos_, false));
+		for (int i = 0; i < total_pos_; ++i) {
+			int ri = pos_r_[i], ci = pos_c_[i];
+			for (int j = 0; j < total_pos_; ++j) {
+				int rj = pos_r_[j], cj = pos_c_[j];
+				if (ri == rj || ci == cj ||
+				    (abs(ri - rj) == 1 && abs(ci - cj) == 1))
+					conflict_[i][j] = true;
 			}
 		}
 	}
@@ -182,15 +180,15 @@ public:
 	// 2. AC-3 预处理   → 迭代删除所有弧不一致候选，搜前即斩死分支
 	// 3. DFS 回溯搜索  → 在净化后的候选集上执行，move 避免二次拷贝
 	// 流水线顺序不可调换: AC-3 必须在前，因为 DFS 依赖净化后的候选集。
-	// AC-3 门控：n<10 或平均域>20 时跳过（小板开销比例高，大域收益薄）
+	// AC-3 门控：n<10 或平均域>20 时跳过
 	bool solve()
 	{
 		Available preprocessed = initial_available_;
 		bool run_ac3 = (n_ >= 10);
 		if (run_ac3) {
 			int total_pos = 0;
-			for (int c = 0; c < n_; ++c)
-				total_pos += (int)preprocessed[c].size();
+			for (int c2 = 0; c2 < n_; ++c2)
+				total_pos += (int)preprocessed[c2].size();
 			if ((double)total_pos / n_ > 20.0)
 				run_ac3 = false;
 		}
@@ -198,6 +196,7 @@ public:
 			return false;
 		return dfs(0, move(preprocessed), 0);
 	}
+
 	// ── 获取结果棋盘 ──
 	// 为什么返回 const T& (常量引用) 而不是 T (值)?
 	//   board_ 是 n×n 的二维矩阵，值返回会拷贝整个棋盘 (O(n²))，
@@ -237,11 +236,6 @@ private:
 		int dy = abs(y - py);
 		return dx == 1 && dy == 1; // 四对角相邻
 	}
-
-		// ── 基于预计算冲突矩阵的 O(1) 查询 ──
-		bool conflictsByIdx(int i, int j) const {
-			return conflict_[i][j];
-		}
 
 		// ── 基于预计算冲突矩阵的 O(1) 查询 ──
 		bool conflictsByIdx(int i, int j) const {
@@ -316,7 +310,7 @@ private:
 	// 与预处理中的 ac3() 不同：此处仅操作未放置颜色，每次 DFS 放置后调用。
 	// 比 Forward Checking 更强：FC 只检查"新放置与未放置是否冲突"，
 	// MAC 额外传播"未放置颜色之间是否仍互容"。
-	// changedColors: 前向检查中域发生变化的颜色，仅从这些出发入队。
+	// changedColors: 前向检查中域发生变化的颜色，仅从这些出发入队
 	bool mac(Available &available, uint32_t placed_mask,
 	         const vector<int> &changed_colors)
 	{
@@ -347,6 +341,7 @@ private:
 		}
 		return true;
 	}
+
 	// ------------------------------------------------------------------------
 	// DFS 递归核心
 	// ------------------------------------------------------------------------
@@ -425,32 +420,8 @@ private:
 			}
 			else if (cnt == best_count)
 			{
-				// 动态 Degree：用当前 available 计算平局颜色的度
-				int deg_c = 0, deg_best = 0;
-				for (int d = 0; d < n_; ++d)
-				{
-					if (d == c || (placed_mask & (1u << d)))
-						continue;
-					const auto &lc = available[c], &ld = available[d];
-					for (const auto &p1 : lc)
-						for (const auto &p2 : ld)
-							if (conflictsWith(p1.first, p1.second, p2.first, p2.second))
-								deg_c++;
-				}
-				for (int d = 0; d < n_; ++d)
-				{
-					if (d == best_color || (placed_mask & (1u << d)))
-						continue;
-					const auto &lb = available[best_color], &ld = available[d];
-					for (const auto &p1 : lb)
-						for (const auto &p2 : ld)
-							if (conflictsWith(p1.first, p1.second, p2.first, p2.second))
-								deg_best++;
-				}
-				if (deg_c > deg_best)
-				{
+				if (degree_[c] > degree_[best_color])
 					best_color = c;
-				}
 			}
 		}
 
@@ -465,6 +436,7 @@ private:
 		//   选值   (LCV)        = Succeed-First: 最易的格子先试，能成一步通
 		//   两者作用在不同决策维度，恰是 CSP 搜索的黄金组合。
 		if (candidates.size() > 1 && (int)candidates.size() <= n_ * 3)
+		{
 			sort(candidates.begin(), candidates.end(),
 				 [&](const Pos &a, const Pos &b)
 				 {
@@ -515,6 +487,7 @@ private:
 			// 颜色需原样保留给下层递归。拷贝整份然后局部替换，比逐色判断省事。
 			Available next_available = available;
 			bool dead_end = false;
+			vector<int> changed_colors; // MAC 智能队列用
 
 			for (int c = 0; c < n_; ++c)
 			{
@@ -548,18 +521,18 @@ private:
 				// move: 将 new_list 内部指针直接移交给 next_available[c]，
 				// 避免逐元素拷贝 (O(1) vs O(n))。之后 new_list 变为空壳。
 				if ((int)new_list.size() < (int)old_list.size())
-					changed_colors.push_back(c);
-				next_available[c] = move(new_list);
+				changed_colors.push_back(c);
+			next_available[c] = move(new_list);
 			}
 
 			if (dead_end)
 				continue; // 剪枝，试下一个
 
-			// ── MAC：仅 n>=9 且剩余<=4 色时才跑（否则前向检查足够）──
-				uint32_t mac_mask = placed_mask | (1u << best_color);
-				bool run_mac = (n_ >= 9 && n_ - depth <= 4);
-				if (run_mac && !mac(next_available, mac_mask, changed_colors))
-					continue; // 某未放置颜色候选清空 → 剪枝
+			// ── MAC：在剩余未放置颜色上运行 AC-3 ──
+			uint32_t mac_mask = placed_mask | (1u << best_color);
+			bool run_mac = (n_ >= 9 && n_ - depth <= 4);
+			if (run_mac && !mac(next_available, mac_mask, changed_colors))
+				continue; // 某未放置颜色候选清空 → 剪枝
 
 			// ── 放置 ──
 			board_[x][y] = 1;

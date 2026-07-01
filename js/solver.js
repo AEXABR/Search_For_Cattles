@@ -245,10 +245,14 @@ function getWorkerCode() {
 
 	  solve() {
 	    const preprocessed = this.initialMask.slice();
-	    // AC-3 门控：平均域 > 20 时跳过（大域场景开销超收益）
-	    let totalPos = 0;
-	    for (let c = 0; c < this.n; c++) totalPos += this.#popcount(preprocessed[c]);
-	    if (totalPos / this.n <= 20) {
+	    // AC-3 门控：n<10 或平均域>20 时跳过（小板开销比例高，大域收益薄）
+	    let runAC3 = this.n >= 10;
+	    if (runAC3) {
+	      let totalPos = 0;
+	      for (let c = 0; c < this.n; c++) totalPos += this.#popcount(preprocessed[c]);
+	      if (totalPos / this.n > 20) runAC3 = false;
+	    }
+	    if (runAC3) {
 	      if (!this.#ac3(preprocessed)) return false;
 	    }
 	    const trail = [];

@@ -10,11 +10,11 @@ function getWorkerCode() {
 	    this.n = n;
 	    this.board = Array.from({ length: n }, () => Array(n).fill(0));
 
-	    // 给每个位置分配唯一索引，预计算冲突矩阵
+	    // 给每个位置分配唯一索引
 	    let idx = 0;
 	    this.posR = [];
 	    this.posC = [];
-	    this.initialAvailable = positionsByColor.map(arr =>
+	    const initialAvailable = positionsByColor.map(arr =>
 	      arr.map(p => {
 	        this.posR.push(p[0]);
 	        this.posC.push(p[1]);
@@ -23,66 +23,97 @@ function getWorkerCode() {
 	    );
 
 	    const total = idx;
-	    this.conflict = new Array(total);
+
+	    // 位→索引映射（O(1)）
+	    const bitPos = new Map();
+	    for (let i = 0; i < total; i++) {
+	      bitPos.set(1n << BigInt(i), i);
+	    }
+	    this.bitPos = bitPos;
+
+	    // 预计算冲突位集
+	    this.conflictMask = new Array(total);
 	    for (let i = 0; i < total; i++) {
 	      const ri = this.posR[i], ci = this.posC[i];
-	      const row = new Array(total).fill(false);
+	      let mask = 0n;
 	      for (let j = 0; j < total; j++) {
 	        if (i === j) continue;
 	        const rj = this.posR[j], cj = this.posC[j];
 	        if (ri === rj || ci === cj ||
 	            (Math.abs(ri - rj) === 1 && Math.abs(ci - cj) === 1)) {
-	          row[j] = true;
+	          mask |= (1n << BigInt(j));
 	        }
 	      }
-	      this.conflict[i] = row;
+	      this.conflictMask[i] = mask;
 	    }
+
+	    // 非冲突位集（前向检查 O(1) 过滤）
+	    this.nonConflictMask = new Array(total);
+	    for (let i = 0; i < total; i++) {
+	      this.nonConflictMask[i] = ~this.conflictMask[i];
+	    }
+
+	    // 初始域位集
+	    this.initialMask = initialAvailable.map(arr => {
+	      let mask = 0n;
+	      for (const p of arr) mask |= (1n << BigInt(p));
+	      return mask;
+	    });
 
 	    // 预计算每种颜色的度
 	    this.degree = new Array(n).fill(0);
 	    for (let c = 0; c < n; c++) {
 	      let deg = 0;
-	      const listC = this.initialAvailable[c];
-	      for (let d = 0; d < n; d++) {
-	        if (c === d) continue;
-	        const listD = this.initialAvailable[d];
-	        for (const p1 of listC) {
-	          for (const p2 of listD) {
-	            if (this.conflict[p1][p2]) deg++;
-	          }
+	      const maskC = this.initialMask[c];
+	      let m = maskC;
+	      while (m) {
+	        const lowBit = m & -m;
+	        const p = bitPos.get(lowBit);
+	        for (let d = 0; d < n; d++) {
+	          if (c === d) continue;
+	          let cross = this.conflictMask[p] & this.initialMask[d];
+	          while (cross) { deg++; cross &= cross - 1n; }
 	        }
+	        m ^= lowBit;
 	      }
 	      this.degree[c] = deg;
 	    }
 	  }
 
-	  // 冲突查表 O(1)
-	  #conflictsWith(p1, p2) {
-	    return this.conflict[p1][p2];
+	  #maskToArray(mask) {
+	    const result = [];
+	    while (mask) {
+	      const lowBit = mask & -mask;
+	      result.push(this.bitPos.get(lowBit));
+	      mask ^= lowBit;
+	    }
+	    return result;
+	  }
+
+	  #popcount(mask) {
+	    let count = 0;
+	    while (mask) { mask &= mask - 1n; count++; }
+	    return count;
 	  }
 
 	  #revise(xi, xj, available) {
-	    let removed = false;
-	    const listI = available[xi];
-	    const listJ = available[xj];
-	    const kept = [];
-	    for (let i = 0; i < listI.length; i++) {
-	      const p = listI[i];
-	      let hasSupport = false;
-	      for (let j = 0; j < listJ.length; j++) {
-	        if (!this.conflict[p][listJ[j]]) {
-	          hasSupport = true;
-	          break;
-	        }
+	    const maskI = available[xi];
+	    const maskJ = available[xj];
+	    let newMask = maskI;
+	    let m = maskI;
+	    while (m) {
+	      const lowBit = m & -m;
+	      const p = this.bitPos.get(lowBit);
+	      if ((this.conflictMask[p] & maskJ) === maskJ) {
+	        newMask &= ~lowBit;
 	      }
-	      if (hasSupport) {
-	        kept.push(p);
-	      } else {
-	        removed = true;
-	      }
+	      m ^= lowBit;
 	    }
-	    if (removed) available[xi] = kept;
-	    return removed;
+	    if (newMask !== maskI) {
+	      available[xi] = newMask;
+	      return true;
+	    }
+	    return false;
 	  }
 
 	  #ac3(available) {
@@ -95,7 +126,7 @@ function getWorkerCode() {
 	    while (queue.length > 0) {
 	      const [xi, xj] = queue.pop();
 	      if (this.#revise(xi, xj, available)) {
-	        if (available[xi].length === 0) return false;
+	        if (available[xi] === 0n) return false;
 	        for (let xk = 0; xk < this.n; xk++) {
 	          if (xk !== xi && xk !== xj) {
 	            queue.push([xk, xi]);
@@ -118,7 +149,7 @@ function getWorkerCode() {
 	    while (queue.length > 0) {
 	      const [xi, xj] = queue.pop();
 	      if (this.#revise(xi, xj, available)) {
-	        if (available[xi].length === 0) return false;
+	        if (available[xi] === 0n) return false;
 	        for (let xk = 0; xk < this.n; xk++) {
 	          if (xk !== xi && xk !== xj && !(placedMask & (1 << xk))) {
 	            queue.push([xk, xi]);
@@ -137,7 +168,7 @@ function getWorkerCode() {
 	    let bestCount = Infinity;
 	    for (let c = 0; c < this.n; c++) {
 	      if (placedMask & (1 << c)) continue;
-	      const cnt = available[c].length;
+	      const cnt = this.#popcount(available[c]);
 	      if (cnt === 0) return false;
 	      if (cnt === 1) { bestColor = c; break; }
 	      if (cnt < bestCount) {
@@ -150,7 +181,7 @@ function getWorkerCode() {
 	      }
 	    }
 
-	    const candidates = available[bestColor];
+	    const candidates = this.#maskToArray(available[bestColor]);
 
 	    // ── LCV ──
 	    if (candidates.length > 1) {
@@ -158,11 +189,11 @@ function getWorkerCode() {
 	        let countA = 0, countB = 0;
 	        for (let c = 0; c < this.n; c++) {
 	          if (c === bestColor || (placedMask & (1 << c))) continue;
-	          const list = available[c];
-	          for (let j = 0; j < list.length; j++) {
-	            if (this.conflict[list[j]][a]) countA++;
-	            if (this.conflict[list[j]][b]) countB++;
-	          }
+	          const maskC = available[c];
+	          let cross = this.conflictMask[a] & maskC;
+	          while (cross) { countA++; cross &= cross - 1n; }
+	          cross = this.conflictMask[b] & maskC;
+	          while (cross) { countB++; cross &= cross - 1n; }
 	        }
 	        return countA - countB;
 	      });
@@ -172,26 +203,20 @@ function getWorkerCode() {
 	      const chosen = candidates[i];
 	      const r = this.posR[chosen], c = this.posC[chosen];
 
-	      // ── 前向检查 ──
+	      // ── 前向检查（位集 O(1) 过滤）──
 	      const nextAvailable = new Array(this.n);
 	      let deadEnd = false;
 	      for (let col = 0; col < this.n && !deadEnd; col++) {
 	        if (col === bestColor || (placedMask & (1 << col))) continue;
-	        const oldList = available[col];
-	        const newList = [];
-	        for (let j = 0; j < oldList.length; j++) {
-	          if (!this.conflict[oldList[j]][chosen]) {
-	            newList.push(oldList[j]);
-	          }
-	        }
-	        if (newList.length === 0) {
+	        const newMask = available[col] & this.nonConflictMask[chosen];
+	        if (newMask === 0n) {
 	          deadEnd = true;
 	        }
-	        nextAvailable[col] = newList;
+	        nextAvailable[col] = newMask;
 	      }
 	      if (deadEnd) continue;
 
-	      // ── MAC：剩余颜色 > 3 时才跑，否则前向检查足够 ──
+	      // ── MAC：剩余颜色 > 3 时才跑 ──
 	      const macPlacedMask = placedMask | (1 << bestColor);
 	      if (this.n - depth > 3) {
 	        if (!this.#mac(nextAvailable, macPlacedMask)) continue;
@@ -206,7 +231,7 @@ function getWorkerCode() {
 	  }
 
 	  solve() {
-	    const preprocessed = this.initialAvailable.map(arr => arr.slice());
+	    const preprocessed = this.initialMask.slice();
 	    if (!this.#ac3(preprocessed)) return false;
 	    return this.#dfs(0, preprocessed, 0);
 	  }

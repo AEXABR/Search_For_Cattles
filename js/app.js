@@ -31,24 +31,51 @@ function updateSwatchUI() {
   });
 }
 
-// ── 两点之间线段穿过的格子（超采样去重）──
-function cellsOnLine(r1, c1, r2, c2) {
-  const dist = Math.hypot(r2 - r1, c2 - c1);
-  const steps = Math.max(1, Math.ceil(dist * 2));
-  const seen = new Set();
+// ── 两点之间线段穿过的格子（Bresenham 整数画线 + 4-连通补角）──
+function cellsOnLine(r0, c0, r1, c1) {
   const result = [];
-  for (let i = 1; i <= steps; i++) {
-    const t = i / steps;
-    const r = Math.round(r1 + (r2 - r1) * t);
-    const c = Math.round(c1 + (c2 - c1) * t);
-    const key = r + ',' + c;
-    if (!seen.has(key)) {
-      seen.add(key);
-      if (r >= 0 && r < state.n && c >= 0 && c < state.n)
-        result.push([r, c]);
+  const dr = Math.abs(r1 - r0);
+  const dc = Math.abs(c1 - c0);
+  const sr = r0 < r1 ? 1 : -1;
+  const sc = c0 < c1 ? 1 : -1;
+  let err = dr - dc;
+  let r = r0, c = c0;
+  while (true) {
+    if (r >= 0 && r < state.n && c >= 0 && c < state.n)
+      result.push([r, c]);
+    if (r === r1 && c === c1) break;
+    const e2 = 2 * err;
+    const stepR = e2 > -dc;
+    const stepC = e2 <  dr;
+    if (stepR && stepC) {
+      // 对角：补一个中间格维持 4-连通
+      err -= dc; err += dr;
+      const midR = r + sr, midC = c;
+      if (midR >= 0 && midR < state.n && midC >= 0 && midC < state.n)
+        result.push([midR, midC]);
+      r = midR; c = midC + sc;
+    } else if (stepR) {
+      err -= dc; r += sr;
+    } else {
+      err += dr; c += sc;
     }
   }
   return result;
+}
+
+// ── 共享：拖拽画线处理，鼠标/触屏复用 ──
+function handlePaintMove(row, col) {
+  if (row === lastCell.row && col === lastCell.col) return;
+  const newVal = state.isEraser ? -1 : state.activeColor;
+  let changed = false;
+  for (const [r, c] of cellsOnLine(lastCell.row, lastCell.col, row, col)) {
+    if (paintCellSilent(r, c, newVal)) changed = true;
+  }
+  if (changed) {
+    drawBoard();
+    scheduleFinalize();
+  }
+  lastCell = { row, col };
 }
 
 // ── 画布事件：鼠标 ──
@@ -69,17 +96,11 @@ canvas.addEventListener('mousemove', (e) => {
   if (!painting || state.n === 0) return;
   const cell = getCell(e);
   if (!cell || !lastCell) return;
-  const newVal = state.isEraser ? -1 : state.activeColor;
-  let changed = false;
-  for (const [r, c] of cellsOnLine(lastCell.row, lastCell.col, cell.row, cell.col)) {
-    if (paintCellSilent(r, c, newVal)) changed = true;
-  }
-  if (changed) finalizeEdit();
-  lastCell = cell;
+  handlePaintMove(cell.row, cell.col);
 });
 
-canvas.addEventListener('mouseup', () => { painting = false; lastCell = null; });
-canvas.addEventListener('mouseleave', () => { painting = false; lastCell = null; });
+canvas.addEventListener('mouseup', () => { painting = false; flushFinalize(); lastCell = null; });
+canvas.addEventListener('mouseleave', () => { painting = false; flushFinalize(); lastCell = null; });
 
 // ── 画布事件：右键擦除 ──
 canvas.addEventListener('contextmenu', (e) => {
@@ -108,16 +129,10 @@ canvas.addEventListener('touchmove', (e) => {
   e.preventDefault();
   const cell = getCell(e.touches[0]);
   if (!cell || !lastCell) return;
-  const newVal = state.isEraser ? -1 : state.activeColor;
-  let changed = false;
-  for (const [r, c] of cellsOnLine(lastCell.row, lastCell.col, cell.row, cell.col)) {
-    if (paintCellSilent(r, c, newVal)) changed = true;
-  }
-  if (changed) finalizeEdit();
-  lastCell = cell;
+  handlePaintMove(cell.row, cell.col);
 }, { passive: false });
 
-canvas.addEventListener('touchend', () => { painting = false; lastCell = null; });
+canvas.addEventListener('touchend', () => { painting = false; flushFinalize(); lastCell = null; });
 
 // ── 画布事件：滚轮换色 ──
 canvas.addEventListener('wheel', (e) => {
@@ -159,6 +174,7 @@ document.getElementById('btn-clear').addEventListener('click', () => {
       state.grid[r][c] = -1;
     }
   }
+  state.colorsOnBoard.clear();
   state.solution = null;
   state.appState = 'editing';
   document.getElementById('btn-solve').disabled = false;
@@ -190,7 +206,7 @@ inputN.addEventListener('wheel', function(e) {
 
 // ── 窗口缩放 ──
 window.addEventListener('resize', () => {
-  if (state.n > 0) render();
+  if (state.n > 0) { resizeCanvas(); render(); }
 });
 
 // ── 启动：预热 Worker ──

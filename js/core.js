@@ -51,6 +51,7 @@ const state = {
   isEraser: false,
   solution: null,
   appState: 'idle',  // idle → editing → solved
+  colorsOnBoard: new Set(),
 };
 
 function initGrid(n) {
@@ -58,6 +59,7 @@ function initGrid(n) {
   state.grid = Array.from({ length: n }, () => Array(n).fill(-1));
   state.solution = null;
   state.appState = 'editing';
+  state.colorsOnBoard.clear();
   const hint = document.getElementById('canvas-hint');
   if (hint) hint.style.opacity = '0.6';
 }
@@ -107,10 +109,15 @@ function getCell(e) {
 
 // ── 棋盘查询 ──
 function colorExistsOnBoard(color) {
+  return state.colorsOnBoard.has(color);
+}
+
+function rebuildColorsOnBoard() {
+  state.colorsOnBoard.clear();
   for (let r = 0; r < state.n; r++) {
     for (let c = 0; c < state.n; c++) {
-      if (state.grid[r][c] === color) return true;
+      const v = state.grid[r][c];
+      if (v !== -1) state.colorsOnBoard.add(v);
     }
   }
-  return false;
 }

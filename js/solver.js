@@ -135,30 +135,11 @@ function getWorkerCode() {
 	        bestCount = cnt;
 	        bestColor = c;
 	      } else if (cnt === bestCount) {
-	        // 动态 Degree：用当前 available 计算平局颜色的度，比静态度更精准
-	        let degC = 0, degBest = 0;
-	        for (let d = 0; d < this.n; d++) {
-          if (d === c || (placedMask & (1 << d))) continue;
-          const listC = available[c], listD = available[d];
-          for (const p1 of listC) {
-            for (const p2 of listD) {
-              if (this.#conflictsWith(p1[0], p1[1], p2[0], p2[1])) degC++;
+            // 静态 Degree 打破平局（预计算，避免动态四重循环）
+            if (this.degree[c] > this.degree[bestColor]) {
+              bestColor = c;
             }
           }
-	        }
-	        for (let d = 0; d < this.n; d++) {
-          if (d === bestColor || (placedMask & (1 << d))) continue;
-          const listB = available[bestColor], listD = available[d];
-          for (const p1 of listB) {
-            for (const p2 of listD) {
-              if (this.#conflictsWith(p1[0], p1[1], p2[0], p2[1])) degBest++;
-            }
-          }
-	        }
-	        if (degC > degBest) {
-          bestColor = c;
-	        }
-	      }
 	    }
 
 	    const candidates = available[bestColor];
@@ -184,7 +165,7 @@ function getWorkerCode() {
 	      const y = candidates[i][1];
 
 	      // ── 前向检查：把当前选择传播到所有未放置的颜色 ──
-	      const nextAvailable = available.slice();
+	      const nextAvailable = new Array(this.n);
 	      let deadEnd = false;
 
 	      for (let c = 0; c < this.n && !deadEnd; c++) {
@@ -256,6 +237,8 @@ function getWorkerCode() {
 }
 
 // 创建/重建 Web Worker
+let _workerBlobUrl = null;
+
 function initWorker() {
   if (solverWorker) solverWorker.terminate();
   if (typeof Worker === 'undefined') {
@@ -263,10 +246,11 @@ function initWorker() {
     solverWorker = null;
     return;
   }
-  const blob = new Blob([getWorkerCode()], { type: 'application/javascript' });
-  const url = URL.createObjectURL(blob);
-  solverWorker = new Worker(url);
-  URL.revokeObjectURL(url); // 创建后立即释放 Blob URL
+  if (!_workerBlobUrl) {
+    const blob = new Blob([getWorkerCode()], { type: 'application/javascript' });
+    _workerBlobUrl = URL.createObjectURL(blob);
+  }
+  solverWorker = new Worker(_workerBlobUrl);
 }
 
 // 从当前棋盘状态构建每种颜色的位置列表

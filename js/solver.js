@@ -10,12 +10,35 @@ function getWorkerCode() {
 	    this.n = n;
 	    this.board = Array.from({ length: n }, () => Array(n).fill(0));
 
-	    // 每种颜色的初始可选位置列表（深拷贝，后续前向检查会动态缩减）
+	    // 给每个位置分配唯一索引，预计算冲突矩阵
+	    let idx = 0;
+	    this.posR = [];
+	    this.posC = [];
 	    this.initialAvailable = positionsByColor.map(arr =>
-	      arr.map(p => [p[0], p[1]])
+	      arr.map(p => {
+	        this.posR.push(p[0]);
+	        this.posC.push(p[1]);
+	        return idx++;
+	      })
 	    );
 
-	    // 预计算每种颜色的度（与其他颜色候选的总冲突数），用于 MRV 平局打破
+	    const total = idx;
+	    this.conflict = new Array(total);
+	    for (let i = 0; i < total; i++) {
+	      const ri = this.posR[i], ci = this.posC[i];
+	      const row = new Array(total).fill(false);
+	      for (let j = 0; j < total; j++) {
+	        if (i === j) continue;
+	        const rj = this.posR[j], cj = this.posC[j];
+	        if (ri === rj || ci === cj ||
+	            (Math.abs(ri - rj) === 1 && Math.abs(ci - cj) === 1)) {
+	          row[j] = true;
+	        }
+	      }
+	      this.conflict[i] = row;
+	    }
+
+	    // 预计算每种颜色的度
 	    this.degree = new Array(n).fill(0);
 	    for (let c = 0; c < n; c++) {
 	      let deg = 0;
@@ -25,51 +48,42 @@ function getWorkerCode() {
 	        const listD = this.initialAvailable[d];
 	        for (const p1 of listC) {
 	          for (const p2 of listD) {
-	            if (this.#conflictsWith(p1[0], p1[1], p2[0], p2[1])) {
-	              deg++;
-	            }
+	            if (this.conflict[p1][p2]) deg++;
 	          }
 	        }
 	      }
-	    this.degree[c] = deg;
+	      this.degree[c] = deg;
 	    }
 	  }
 
-	  // 检查 (x,y) 是否与已放置的牛 (px,py) 冲突
-	  // 冲突条件: 同行 / 同列 / 四对角相邻
-	  #conflictsWith(x, y, px, py) {
-	    if (x === px || y === py) return true;
-	    const dx = x - px;
-	    const dy = y - py;
-	    return (dx === 1 || dx === -1) && (dy === 1 || dy === -1);
+	  // 冲突查表 O(1)
+	  #conflictsWith(p1, p2) {
+	    return this.conflict[p1][p2];
 	  }
 
-	  // ── AC-3 弧一致性预处理 ──
-	  // 在 DFS 前迭代删除所有弧不一致的候选值，削减初始搜索空间
-	  	  #revise(xi, xj, available) {
-	      let removed = false;
-	      const listI = available[xi];
-	      const listJ = available[xj];
-	      const kept = [];
-	      for (let i = 0; i < listI.length; i++) {
-	        const [x, y] = listI[i];
-	        let hasSupport = false;
-	        for (let j = 0; j < listJ.length; j++) {
-	          const [px, py] = listJ[j];
-	          if (!this.#conflictsWith(x, y, px, py)) {
-	            hasSupport = true;
-	            break;
-	          }
-	        }
-	        if (hasSupport) {
-	          kept.push(listI[i]);
-	        } else {
-	          removed = true;
+	  #revise(xi, xj, available) {
+	    let removed = false;
+	    const listI = available[xi];
+	    const listJ = available[xj];
+	    const kept = [];
+	    for (let i = 0; i < listI.length; i++) {
+	      const p = listI[i];
+	      let hasSupport = false;
+	      for (let j = 0; j < listJ.length; j++) {
+	        if (!this.conflict[p][listJ[j]]) {
+	          hasSupport = true;
+	          break;
 	        }
 	      }
-	      if (removed) available[xi] = kept;
-	      return removed;
+	      if (hasSupport) {
+	        kept.push(p);
+	      } else {
+	        removed = true;
+	      }
 	    }
+	    if (removed) available[xi] = kept;
+	    return removed;
+	  }
 
 	  #ac3(available) {
 	    const queue = [];
@@ -83,17 +97,15 @@ function getWorkerCode() {
 	      if (this.#revise(xi, xj, available)) {
 	        if (available[xi].length === 0) return false;
 	        for (let xk = 0; xk < this.n; xk++) {
-          if (xk !== xi && xk !== xj) {
-            queue.push([xk, xi]);
-          }
+	          if (xk !== xi && xk !== xj) {
+	            queue.push([xk, xi]);
+	          }
 	        }
 	      }
 	    }
 	    return true;
 	  }
 
-	  // ── MAC：在已放置变量的剩余域上运行 AC-3（跳过 placedMask 中的颜色）──
-	  // 与 solve() 中的 AC-3 预处理不同：此处仅操作未放置颜色，每次 DFS 都调用。
 	  #mac(available, placedMask) {
 	    const queue = [];
 	    for (let i = 0; i < this.n; i++) {
@@ -108,43 +120,39 @@ function getWorkerCode() {
 	      if (this.#revise(xi, xj, available)) {
 	        if (available[xi].length === 0) return false;
 	        for (let xk = 0; xk < this.n; xk++) {
-          if (xk !== xi && xk !== xj && !(placedMask & (1 << xk))) {
-            queue.push([xk, xi]);
-          }
+	          if (xk !== xi && xk !== xj && !(placedMask & (1 << xk))) {
+	            queue.push([xk, xi]);
+	          }
 	        }
 	      }
 	    }
 	    return true;
 	  }
 
-	  // DFS + 前向检查 + 动态 MRV
-	  // available[color] = 当前层各颜色仍可用的位置列表
-	  // placedMask         = 位掩码标记已放置的颜色 (bit c = 1 表示颜色 c 已放)
 	  #dfs(depth, available, placedMask) {
 	    if (depth === this.n) return true;
 
-	    // ── 动态 MRV + 动态 Degree 平局打破 ──
+	    // ── 动态 MRV + 静态 Degree 平局打破 ──
 	    let bestColor = -1;
 	    let bestCount = Infinity;
 	    for (let c = 0; c < this.n; c++) {
-	      if (placedMask & (1 << c)) continue;   // 已放置，跳过
+	      if (placedMask & (1 << c)) continue;
 	      const cnt = available[c].length;
-	      if (cnt === 0) return false;            // 某颜色无候选格，死胡同
-	      if (cnt === 1) { bestColor = c; break; } // 1 个候选不可能更优
+	      if (cnt === 0) return false;
+	      if (cnt === 1) { bestColor = c; break; }
 	      if (cnt < bestCount) {
 	        bestCount = cnt;
 	        bestColor = c;
 	      } else if (cnt === bestCount) {
-            // 静态 Degree 打破平局（预计算，避免动态四重循环）
-            if (this.degree[c] > this.degree[bestColor]) {
-              bestColor = c;
-            }
-          }
+	        if (this.degree[c] > this.degree[bestColor]) {
+	          bestColor = c;
+	        }
+	      }
 	    }
 
 	    const candidates = available[bestColor];
 
-	    // ── LCV：按对其他颜色的约束数升序排列（约束少的优先尝试）──
+	    // ── LCV ──
 	    if (candidates.length > 1) {
 	      candidates.sort((a, b) => {
 	        let countA = 0, countB = 0;
@@ -152,8 +160,8 @@ function getWorkerCode() {
 	          if (c === bestColor || (placedMask & (1 << c))) continue;
 	          const list = available[c];
 	          for (let j = 0; j < list.length; j++) {
-	            if (this.#conflictsWith(list[j][0], list[j][1], a[0], a[1])) countA++;
-	            if (this.#conflictsWith(list[j][0], list[j][1], b[0], b[1])) countB++;
+	            if (this.conflict[list[j]][a]) countA++;
+	            if (this.conflict[list[j]][b]) countB++;
 	          }
 	        }
 	        return countA - countB;
@@ -161,49 +169,43 @@ function getWorkerCode() {
 	    }
 
 	    for (let i = 0; i < candidates.length; i++) {
-	      const x = candidates[i][0];
-	      const y = candidates[i][1];
+	      const chosen = candidates[i];
+	      const r = this.posR[chosen], c = this.posC[chosen];
 
-	      // ── 前向检查：把当前选择传播到所有未放置的颜色 ──
+	      // ── 前向检查 ──
 	      const nextAvailable = new Array(this.n);
 	      let deadEnd = false;
-
-	      for (let c = 0; c < this.n && !deadEnd; c++) {
-	        if (c === bestColor || (placedMask & (1 << c))) continue;
-	        const oldList = available[c];
+	      for (let col = 0; col < this.n && !deadEnd; col++) {
+	        if (col === bestColor || (placedMask & (1 << col))) continue;
+	        const oldList = available[col];
 	        const newList = [];
 	        for (let j = 0; j < oldList.length; j++) {
-	          const ox = oldList[j][0];
-	          const oy = oldList[j][1];
-	          if (!this.#conflictsWith(ox, oy, x, y)) {
+	          if (!this.conflict[oldList[j]][chosen]) {
 	            newList.push(oldList[j]);
 	          }
 	        }
 	        if (newList.length === 0) {
-	          deadEnd = true; // 某颜色无可用格 → 该候选不可行
+	          deadEnd = true;
 	        }
-	        nextAvailable[c] = newList;
+	        nextAvailable[col] = newList;
+	      }
+	      if (deadEnd) continue;
+
+	      // ── MAC：剩余颜色 > 3 时才跑，否则前向检查足够 ──
+	      const macPlacedMask = placedMask | (1 << bestColor);
+	      if (this.n - depth > 3) {
+	        if (!this.#mac(nextAvailable, macPlacedMask)) continue;
 	      }
 
-	      if (deadEnd) continue; // 提前剪枝，试下一个候选
-
-	      // ── MAC：在剩余未放置颜色上运行 AC-3 ──
-	      const macPlacedMask = placedMask | (1 << bestColor);
-	      if (!this.#mac(nextAvailable, macPlacedMask)) continue;
-
 	      // 放置
-	      this.board[x][y] = 1;
-
-	      if (this.#dfs(depth + 1, nextAvailable, placedMask | (1 << bestColor))) return true;
-
-	      // 回溯：仅需回退 board，available / placedMask 由调用栈自动恢复
-	      this.board[x][y] = 0;
+	      this.board[r][c] = 1;
+	      if (this.#dfs(depth + 1, nextAvailable, macPlacedMask)) return true;
+	      this.board[r][c] = 0;
 	    }
 	    return false;
 	  }
 
 	  solve() {
-	    // AC-3 预处理：在 DFS 前消除所有弧不一致的候选
 	    const preprocessed = this.initialAvailable.map(arr => arr.slice());
 	    if (!this.#ac3(preprocessed)) return false;
 	    return this.#dfs(0, preprocessed, 0);
@@ -219,7 +221,6 @@ function getWorkerCode() {
 	  const solver = new Solver(n, positionsByColor);
 	  const start = performance.now();
 
-	  // 30 秒超时保护
 	  const timeout = setTimeout(() => {
 	    self.postMessage({ type: 'timeout' });
 	  }, 30000);
@@ -235,7 +236,6 @@ function getWorkerCode() {
 	};
 `;
 }
-
 // 创建/重建 Web Worker
 let _workerBlobUrl = null;
 

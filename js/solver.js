@@ -185,8 +185,8 @@ function getWorkerCode() {
 
 	    const candidates = this.#maskToArray(available[bestColor]);
 
-	    // ── LCV ──
-	    if (candidates.length > 1) {
+	    // ── LCV：候选数 > n×3 时跳过（排序开销超过收益）──
+	    if (candidates.length > 1 && candidates.length <= this.n * 3) {
 	      candidates.sort((a, b) => {
 	        let countA = 0, countB = 0;
 	        for (let c = 0; c < this.n; c++) {
@@ -224,8 +224,9 @@ function getWorkerCode() {
 	      }
 
 	      if (!deadEnd) {
-	        // ── MAC：剩余颜色 > 3 时才跑 ──
-	        if (this.n - depth <= 3 || this.#mac(available, macPlacedMask, trail, changedColors)) {
+	        // ── MAC：仅 n≥9 且剩余 ≤4 色时才跑（n≤8 时前向检查足够）──
+	        const runMAC = this.n >= 9 && this.n - depth <= 4;
+	        if (!runMAC || this.#mac(available, macPlacedMask, trail, changedColors)) {
 	          const r = this.posR[chosen], c = this.posC[chosen];
 	          this.board[r][c] = 1;
 	          if (this.#dfs(depth + 1, available, macPlacedMask, trail)) return true;
@@ -244,7 +245,12 @@ function getWorkerCode() {
 
 	  solve() {
 	    const preprocessed = this.initialMask.slice();
-	    if (!this.#ac3(preprocessed)) return false;
+	    // AC-3 门控：平均域 > 20 时跳过（大域场景开销超收益）
+	    let totalPos = 0;
+	    for (let c = 0; c < this.n; c++) totalPos += this.#popcount(preprocessed[c]);
+	    if (totalPos / this.n <= 20) {
+	      if (!this.#ac3(preprocessed)) return false;
+	    }
 	    const trail = [];
 	    return this.#dfs(0, preprocessed, 0, trail);
 	  }
